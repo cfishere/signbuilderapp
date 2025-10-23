@@ -1,0 +1,55 @@
+Loading and managing fonts in Fabric, https://fabric5.fabricjs.com/loadfonts
+Includes link Font Face Observer (https://github.com/bramstein/fontfaceobserver) to preload
+Google Fonts, using the following steps:
+
+- Add the custom fonts using @import in your CSS
+- Make an array containing the names of all the custom fonts
+- Load all the custom fonts using a promise or load them by request
+- When the promise is fulfilled, initialize the fabric canvas
+(code example provided)
+
+
+1. Google Print Fonts
+
+	Story Script (stylized sanserif italicized)
+	Cossette Titre (sanserif)
+	Bebas Neue (thick, square, upright equal-weighted lines sanserif)
+	Playfair Display (serif)
+	Lora (serif)
+	Anton (Strong Bold Short-stemmed, even lines sanserif)
+	Archivo Black (Similar to Anton, wider lettering)
+	Bungee (Bold, stylized, all-caps, rounded corners, sanserif)
+	Lobster (cursive)
+	Alfa Slab One (Bold, Blocky serif font)
+	DM Serif Display (refined, times romanesque, serif)
+	Caveat (Hand font, not cursive)
+	Change One (Very bold, short-stemmed, sanserif)
+	Luckiest Guy (sanserif bold, highly stylistic, whimsical)
+	Marcellus (sanserif, light, delicate)
+	Oleo Script (Bold cursive)
+	Titan One (rounded bold sanserif)
+	Amatic SC (hand printed, very light)
+	Delius (hand printed)
+	Courgette (hand printed, semi-bold)
+	Gloria Hallelujah (Hand printed, whimsical)
+	Rubik Distressed (highly-stylized, worn bold creative)
+	Berkshire Swash (highly-stylized serif font)
+	Manufacturing Consent (serif, old-English style)
+	Special Elite (old typewriter, worn font)
+	Averia Serif Libre (soft rounded serif)
+	Boogaloo (bolder, sanserif, hand feel)
+	Julee (stylized sanserif)
+	Limelight (marquee, 1930's font style, sanserif)
+	Protest Revolution (Artsy, distressed, hand-feel)
+	Mouse Memoirs (sanserif, bold)
+
+
+
+
+	
+
+	
+
+
+
+2. Google Channel Letter Fonts
