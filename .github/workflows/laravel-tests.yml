@@ -1,0 +1,78 @@
+name: Laravel tests
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  php:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: testing
+          MYSQL_USER: test
+          MYSQL_PASSWORD: test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, intl, pdo_mysql, bcmath, gd
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare application environment
+        run: |
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+            else
+              touch .env
+            fi
+          fi
+
+          # Configure DB for CI
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env || echo "DB_CONNECTION=mysql" >> .env
+          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env || echo "DB_HOST=127.0.0.1" >> .env
+          sed -i 's/^DB_PORT=.*/DB_PORT=3306/' .env || echo "DB_PORT=3306" >> .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=testing/' .env || echo "DB_DATABASE=testing" >> .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=test/' .env || echo "DB_USERNAME=test" >> .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=test/' .env || echo "DB_PASSWORD=test" >> .env
+
+          php artisan key:generate --force
+          php artisan config:clear
+          php artisan cache:clear
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..60}; do
+            if mysqladmin ping -h 127.0.0.1 -proot --silent; then
+              echo "MySQL is up!"
+              break
+            fi
+            echo "Waiting for MySQL ($i)..."
+            sleep 1
+          done
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Run Laravel tests
+        run: php artisan test --testsuite=Unit,Feature
