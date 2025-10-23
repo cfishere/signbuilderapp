@@ -3,104 +3,42 @@ on:
   pull_request:
     branches: [main, dev]
   push:
-    branches: [main]   # optional; keeps one run on PRs
+    branches: [main]
 
 jobs:
   php:
     name: Laravel CI
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testing
-          MYSQL_USER: test
-          MYSQL_PASSWORD: test
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
     steps:
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          extensions: mbstring, intl, pdo_mysql, bcmath, gd
-          coverage: none
-      - run: composer install --no-interaction --prefer-dist --no-progress
-      - name: Prepare .env
-        run: |
-          cp -n .env.example .env || true
-          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env || echo "DB_CONNECTION=mysql" >> .env
-          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env || echo "DB_HOST=127.0.0.1" >> .env
-          sed -i 's/^DB_PORT=.*/DB_PORT=3306/' .env || echo "DB_PORT=3306" >> .env
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=testing/' .env || echo "DB_DATABASE=testing" >> .env
-          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=test/' .env || echo "DB_USERNAME=test" >> .env
-          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=test/' .env || echo "DB_PASSWORD=test" >> .env
-          php artisan key:generate --force
-          php artisan config:clear
-          php artisan cache:clear
-      - name: Wait for MySQL
-        run: |
-          for i in {1..60}; do
-            if mysqladmin ping -h 127.0.0.1 -proot --silent; then break; fi
-            sleep 1
-          done
-      - run: php artisan migrate --force
-      - run: php artisan test --testsuite=Unit,Feature
-name: Laravel tests
-on:
-  pull_request:
-    branches: [main, dev]
-  push:
-    branches: [main]   # optional; keeps one run on PRs
 
-jobs:
-  php:
-    name: Laravel CI
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: testing
-          MYSQL_USER: test
-          MYSQL_PASSWORD: test
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-    steps:
-      - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: mbstring, intl, pdo_mysql, bcmath, gd
+          extensions: mbstring, intl, sqlite, pdo_sqlite, bcmath, gd
           coverage: none
-      - run: composer install --no-interaction --prefer-dist --no-progress
-      - name: Prepare .env
+
+      - name: Install Composer deps
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare .env (SQLite)
         run: |
           cp -n .env.example .env || true
-          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=mysql/' .env || echo "DB_CONNECTION=mysql" >> .env
-          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env || echo "DB_HOST=127.0.0.1" >> .env
-          sed -i 's/^DB_PORT=.*/DB_PORT=3306/' .env || echo "DB_PORT=3306" >> .env
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=testing/' .env || echo "DB_DATABASE=testing" >> .env
-          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=test/' .env || echo "DB_USERNAME=test" >> .env
-          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=test/' .env || echo "DB_PASSWORD=test" >> .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env || echo "DB_CONNECTION=sqlite" >> .env
+          # Point to a local sqlite file in the project root
+          sed -i 's|^DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env || echo "DB_DATABASE=database/database.sqlite" >> .env
           php artisan key:generate --force
           php artisan config:clear
           php artisan cache:clear
-      - name: Wait for MySQL
+
+      - name: Create SQLite database file
         run: |
-          for i in {1..60}; do
-            if mysqladmin ping -h 127.0.0.1 -proot --silent; then break; fi
-            sleep 1
-          done
-      - run: php artisan migrate --force
-      - run: php artisan test --testsuite=Unit,Feature
+          mkdir -p database
+          touch database/database.sqlite
+          echo ".databases" | sqlite3 database/database.sqlite
+
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      - name: Run tests (Unit & Feature)
+        run: php artisan test --testsuite=Unit,Feature

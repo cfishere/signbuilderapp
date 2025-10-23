@@ -3,7 +3,29 @@ on:
   pull_request:
     branches: [main, dev]
   push:
-    branches: [main]   # optional; keeps one run on PRs
+    branches: [main]   # keep pushes on main; PRs won’t double-run
+
+jobs:
+  node:
+    name: Node CI
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build --if-present
+      - run: npm test --if-present
+name: Node build & Vitest
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main]   # keep pushes on main; PRs won’t double-run
 
 jobs:
   node:
