@@ -1,5 +1,6 @@
 // ESM module for Fabric v6.x
 // Save this file as UTF-8 (no BOM)
+// This file is replaced by Fabric.Path using TextOnPath in Fabric v7+
 
 import * as fabric from 'fabric';
 
@@ -55,7 +56,7 @@ export function createCurvedText(text, curve = {}, style = {}) {
   const startA    = nnum(startAngle, 270);
   const r = Math.max(MIN_R, Math.abs(rawRadius));
   const startAngleNorm = startA + (rawRadius < 0 ? 180 : 0);
- 
+
  // total span. compute total arc span (degrees)
   let totalWidth = 0;
   for (let i = 0; i < widths.length; i++) totalWidth += widths[i];
@@ -174,7 +175,7 @@ export function reflowCurvedText(group, updates = {}) {
 
   // read values
   let text = newCurved.text || group.curved.text || '';
-  if (text.length === 0) text = ' '; // keep a visible placeholder so the group stays selectable  
+  if (text.length === 0) text = ' '; // keep a visible placeholder so the group stays selectable
   const radius     = newCurved.radius     != null ? newCurved.radius     : 150;
   const startAngle = newCurved.startAngle != null ? newCurved.startAngle : 270;
   const spacing    = newCurved.spacing    != null ? newCurved.spacing    : 0;
@@ -226,7 +227,7 @@ export function reflowCurvedText(group, updates = {}) {
 
     // ... inside the glyph loop:
     const x = left + Math.cos(rad) * r;
-    const y = top  + Math.sin(rad) * r;  
+    const y = top  + Math.sin(rad) * r;
     const rotate = angleDeg + (clockwise ? 90 : -90) + (inward ? 180 : 0);
 
     newLetters.push(new fabric.Text(ch, {

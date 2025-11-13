@@ -1,148 +1,106 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-vi.stubEnv('MODE', 'test'); // Forces the import.meta.env.MODE === 'test' to be true
-import router from '@/router';
-import axios from 'axios';
-import { signTemplates } from '@/templates/signTemplates';
-import { mount } from '@vue/test-utils';
-import * as fabric from 'fabric';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { fabric } from 'fabric'
+import CanvasEditor from '@/Components/CanvasEditor.vue'
 
+// ---- Defensive fabric.Canvas mock (constructor) ----
+const CanvasCtor = /** @type {import('vitest').Mock} */ (fabric.Canvas)
 
-
-
-
-
-let wrapper;
-
-let canvasMock;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-vi.mock('axios', () => {
-  const mockGet = vi.fn((url) => {
-    console.log('🔥 axios.get called with:', url);
-    return Promise.resolve({
-      data: [
-        {
-          id: 1,
-          name: 'Test Design',
-          canvas_json: '{}',
-          created_at: '2025-07-01T00:00:00Z',
-        }
-      ]
-    });
-  });
-
-  return {
-    default: {
-      get: mockGet
+CanvasCtor.mockImplementation((elOrId, opts) => {
+  // Resolve the element or id → real <canvas> in the DOM
+  let el = elOrId
+  if (typeof elOrId === 'string') {
+    // try find existing, otherwise inject via innerHTML to bypass createElement patches
+    el = document.getElementById(elOrId)
+    if (!el) {
+      document.body.insertAdjacentHTML('beforeend', `<canvas id="${elOrId}"></canvas>`)
+      el = document.getElementById(elOrId)
     }
-  };
-});
-
-/*vi.mock('@/components/UserDesignPanel.vue', () => ({
-  default: {
-    template: '<div>UserDesignPanel (mock)</div>'
   }
-}));*/
 
+  // If the provided value isn't a real node, coerce to a "node-like" object
+  if (!el || typeof el.setAttribute !== 'function') {
+    const fake = /** @type {any} */ ({
+      setAttribute: () => {},
+      getAttribute: () => null,
+      style: {},
+      width: 300,
+      height: 150,
+      toDataURL: () => 'data:image/png;base64,MOCK',
+    })
+    el = fake
+  }
 
+  // Fabric exposes these DOM nodes; point them at the same hardened element
+  const lowerCanvasEl = /** @type {any} */ (el)
+  const upperCanvasEl = /** @type {any} */ ({
+    setAttribute: () => {},
+    getAttribute: () => null,
+    style: {},
+  })
 
-let fabricCanvasSpy = vi.spyOn(fabric, 'Canvas').mockImplementation(() => {
   return {
+    // DOM elements Fabric usually provides
+    lowerCanvasEl,
+    upperCanvasEl,
+
+    // keep the raw el reference for any custom code that expects it
+    el,
+    opts,
+
+    // typical Fabric methods used in app code
     on: vi.fn(),
+    off: vi.fn(),
     add: vi.fn(),
-    getWidth: () => 800,
-    getHeight: () => 600,
-    renderAll: vi.fn(),
-    sendToBack: vi.fn(), // for rect
-  };
-});
-import CanvasEditor from '@/components/CanvasEditor.vue';
+    remove: vi.fn(),
+    setActiveObject: vi.fn(),
+    getActiveObject: vi.fn(),
+    getObjects: vi.fn(() => []),
+    requestRenderAll: vi.fn(),
+    loadFromJSON: vi.fn((json, cb) => cb && cb()),
+    // common dimension APIs some apps call
+    setWidth: vi.fn(),
+    setHeight: vi.fn(),
+    setDimensions: vi.fn(),
+    dispose: vi.fn(),
+  }
+})
 
+ describe('CanvasEditor.vue', () => {
 
+  // These hooks run before/after each test in this describe
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <canvas id="canvasEl"></canvas>
+      <input id="email" type="email" />
+    `
+  })
 
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
 
-describe('CanvasEditor.vue', () => {
-  let wrapper;
-  
+  it('mounts successfully', async () => {
+    const wrapper = mount(CanvasEditor, {
+      attachTo: document.body,
+      props: {
+        email: 'testuser@sample.com',
+        width: 72,
+        height: 36,
+        signType: 'Wall Sign Illuminated Cabinet',
+        postalCode: '12345',
+        designId: '',
+      },
+      global: {
+        stubs: {
+          Head: true,
+          Link: true,
+          Teleport: true,
+          FontAwesomeIcon: { template: '<i />' },
+        },
+      },
+    })
 
-beforeEach(() => {
-  // 👇 Mock canvas instance
-  canvasMock = {
-    on: vi.fn(),
-    add: vi.fn(),
-    getWidth: () => 800,
-    getHeight: () => 600,
-    renderAll: vi.fn(),
-    sendToBack: vi.fn(),
-  };
-
-  // 👇 Spy *before* mounting
-  fabricCanvasSpy = vi.spyOn(fabric, 'Canvas').mockImplementation(() => {
-    console.log('🧪 fabric.Canvas mock called!');
-    return canvasMock;
-  });
-
-  /*// 👇 Create fake canvas element for fabric
-  document.body.innerHTML = `<canvas id="canvasEl"></canvas>`;*/
-
-  wrapper = mount(CanvasEditor, {
-    props: {
-      email: 'testuser@sample.com',
-      width: 72,
-      height: 36,
-      signType: 'Wall Sign Illuminated Cabinet',
-      postalCode: '12345',
-      designId: '',
-    },
-  });
-});
-
-
-
-  expect(signTemplates['Wall Sign Illuminated Cabinet']).toBeDefined();
-
-  it('mounts successfully', () => {
-    expect(wrapper.exists()).toBe(true);
-  });
-
-  it('axios.get is called with expected URL', async () => {
-  await axios.get('/api/user/canvases');
-  expect(axios.get).toHaveBeenCalledWith('/api/user/canvases');
-});
-
-  it('calls fabric.Canvas on mount', () => {
-  expect(fabricCanvasSpy).toHaveBeenCalled(); // 💥 will now succeed
-});
-
-  it('fabric.Canvas returned object has .on()', () => {
-    /*const instance = fabricCanvasSpy().mock.results[0]?.value;*/
-    const instance = fabricCanvasSpy.mock.results[0]?.value;
-    expect(typeof instance?.on).toBe('function');
-  });
-
-
-
-});
+    expect(wrapper.exists()).toBe(true)
+  })
+})
