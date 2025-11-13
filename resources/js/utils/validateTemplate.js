@@ -1,44 +1,39 @@
-export function validateTemplate(template) {
-  if (typeof template !== 'object' || !template) return false;
+// resources/js/utils/validateTemplate.js
 
-  const validated = { ...template };
+function isFiniteNumber(n) {
+  return typeof n === 'number' && Number.isFinite(n);
+}
 
-  // 🔹 Validate `face` (required unless type is neon or channel letters)
-  if (validated.face) {
-    validated.face.width = Number(validated.face.width) || 72;
-    validated.face.height = Number(validated.face.height) || 36;
-    validated.face.shape = ['flat', 'pan-formed', 'custom'].includes(validated.face.shape)
-      ? validated.face.shape
-      : 'flat';
+export function validateTemplate(t) {
+  const warnings = [];
+  const errors = [];
+
+  if (!t) {
+    errors.push('Template is null/undefined.');
+    return { ok: false, warnings, errors };
   }
 
-  // 🔹 Validate `cabinet` (optional)
-  if (validated.cabinet) {
-    validated.cabinet.width = Number(validated.cabinet.width) || 72;
-    validated.cabinet.height = Number(validated.cabinet.height) || 36;
-    validated.cabinet.depth = Number(validated.cabinet.depth) || 8;
+  // Face is recommended for most sign types
+  if (!t.face) {
+    warnings.push('face missing; defaults will be applied during normalization');
+  } else {
+    if (!isFiniteNumber(t.face.width)) {
+      warnings.push('face.width missing; defaulting to 0');
+    }
+    if (!isFiniteNumber(t.face.height)) {
+      warnings.push('face.height missing; defaulting to 0');
+    }
   }
 
-  // 🔹 Validate `post` (optional)
-  if (validated.post) {
-    validated.post.height = Number(validated.post.height) || 3;
-    validated.post.mount = ['bottom', 'side'].includes(validated.post.mount)
-      ? validated.post.mount
-      : 'bottom';
-    validated.post.color = validated.post.color || '#444444';
+  // Illuminated signs: lighting is optional but recommended
+  if (t.category === 'illuminated' && !t.lighting) {
+    warnings.push('lighting missing for illuminated sign; defaults will apply');
   }
 
-  // 🔹 Validate `lighting` (optional)
-  if (validated.lighting) {
-    const lt = validated.lighting;
-    lt.type = ['led', 'neon tube', 'neon strand', 'flourescent tube'].includes(lt.type)
-      ? lt.type
-      : 'led';
-    lt.length = Number(lt.length) || 24;
-    lt.uom = ['inches', 'feet'].includes(lt.uom) ? lt.uom : 'inches';
-    lt.structure = ['tube', 'strand'].includes(lt.structure) ? lt.structure : 'tube';
-    lt.count = Number(lt.count) || 1;
+  // Cabinet present but incomplete
+  if (t.cabinet && (!isFiniteNumber(t.cabinet.width) || !isFiniteNumber(t.cabinet.height))) {
+    warnings.push('cabinet width/height incomplete; defaulting to face dimensions');
   }
 
-  return validated;
+  return { ok: errors.length === 0, warnings, errors };
 }

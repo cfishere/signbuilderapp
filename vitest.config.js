@@ -8,14 +8,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './resources/js'),
+      '@tests': path.resolve(__dirname, 'resources/js/tests'),
     },
   },
   test: {
     globals: true,
     environment: 'jsdom',
     mockReset: true,
-    /*setupFiles: ['resources/js/tests/vitest.setup.js'],*/
-    setupFiles: ['resources/js/setupTests.js'],
+    setupFiles: ['resources/js/setupTests.ts'],
     hookTimeout: 20000, // 20 seconds
   },
 });
