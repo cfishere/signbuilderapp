@@ -123,7 +123,7 @@ onMounted(() => {
   // If a saved design JSON was provided, load it; else draw fresh cabinet
   if (props.designData?.canvas_json) {
     try {
-      canvas.loadFromJSON(props.designData.canvas_json, canvas.renderAll.bind(canvas))
+      canvas.loadFromJSON(props.designData.canvas_json, canvas.requestRenderAll.bind(canvas))
     } catch (e) {
       console.warn('Failed to load saved canvas JSON:', e)
     }
@@ -140,7 +140,7 @@ onMounted(() => {
     const { width, height } = el.getBoundingClientRect()
     canvas.setWidth(width)
     canvas.setHeight(height)
-    canvas.renderAll()
+    canvas.requestRenderAll()
   }
   resize()
   window.addEventListener('resize', resize)

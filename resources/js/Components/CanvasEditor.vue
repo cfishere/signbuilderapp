@@ -117,7 +117,18 @@
       </p> -->
           </section>
 
-          <!-- Auth / Designs panel always visible (no drawer toggle needed) -->
+<ObjectPropertiesPanel
+  :hasSelection="!!hasSelection"
+  :kind="selectionKind"
+  :styleState="styleState"
+  :fonts="availableFonts"  
+  @font-family="onChangeFontFamily" 
+  @change-style="handlePropertiesStyleChange"
+  @path-text-change="handlePathTextChange"
+  @path-text-apply="handlePathTextApply"
+/>
+
+          <!-- Auth / Designs panel always visible -->
           <section class="border rounded-xl p-4 shadow-sm">
            
            
@@ -144,16 +155,14 @@
   <!-- TOOLBAR: directly beneath canvas, horizontal -->
   <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2
               sticky md:static bottom-3 z-10">
-    <DesignerToolsPanel
-  :showDrawer="false"
+    <DesignerToolsPanel  
   :snapToGrid="snapToGrid"
   :hasSelection="hasSelection"  
   :gridVisible="gridVisible"
-  :fonts="availableFonts"
-  @font-family="onChangeFontFamily"
   @toggle-snap="(val) => snapToGrid = val"
   @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
-  @add-text="addText"    
+  @add-text="addText"
+  @add-curved-text="addTextOnPath"     
   @add-rectangle="addRectangle"
   @add-circle="addCircle"
   @upload-image="uploadImage"
@@ -168,18 +177,10 @@
   @align-bottom="alignBottom"
   @group="groupObjects"
   @ungroup="ungroupObjects"  
-  @file-upload="handleFileUpload"  
-  @stroke-width="onChangeStrokeWidth"
-  @stroke-color="onChangeStrokeColor"
-  @stroke-clear="onClearStroke"
-  @fill-color="onChangeFillColor" 
-  :curved-ui="curvedUI"
-  @curved-ui-change="val => { Object.assign(curvedUI, val); reflowActiveCurved(val); }"   
-  @text-style-change="applyTextStyleToActive" 
-  @add-curved-text="addCurvedText"
-  @curve-selected-text="curveSelectedText"
-  @uncurve-selected-text="uncurveSelectedText"
+  @file-upload="handleFileUpload"    
+  :fonts="availableFonts"  
 />
+
   </div>
 </section>
 </div>
@@ -200,13 +201,15 @@ import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted, reactive, g
 import { useDesignerRouteGuard } from '@/composables/useDesignerRouteGuard';
 import { ensureFontLoaded, preloadFonts } from '@/utils/fontLoader'
 import axios from 'axios';
-import UserDesignPanel from '@/Components/UserDesignPanel.vue';
+/*import UserDesignPanel from '@/Components/UserDesignPanel.vue';*/
 import DesignerToolsPanel from '@/Components/DesignerToolsPanel.vue';
+import ObjectPropertiesPanel from '@/Components/ObjectPropertiesPanel.vue'
 import { drawPost, drawCabinet, drawFace, drawLighting } from '@/utils/canvasDrawUtils';
+import { createTextOnPath, updateTextOnPath, rehydrateTextOnPath } from '@/utils/textOnPath';
 import { signTemplates } from '@/templates/signTemplates';
-import * as fabric from 'fabric';
+import { fabric } from '@/utils/fabricRef';
 import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
-import { createCurvedText, reflowCurvedText, applyStrokeToCurved } from '@/utils/curvedText'
+import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
 import { applyFontFamily } from '@/utils/applyFontFamily'
 
 
@@ -260,7 +263,7 @@ const fileInput = ref(null)
 
 const snapToGrid = ref(false)
 const selectedObject = reactive({})
-const showDrawer = ref(false)
+/*const showDrawer = ref(false)*/
 let totalHeight = 0
 const activeObj = ref(null);
 
@@ -269,6 +272,20 @@ let canvas
 const viewport = reactive({ w: 1200, h: 620 }) // updated on mount/resize
 const pad = 40 // screen-pixel padding around the face when fitting
 const hasSelection = ref(false)
+const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'generic'>('none')
+
+const styleState = reactive({
+  fill: '#000000' as string | null,
+  stroke: null as string | null,
+  strokeWidth: 0,
+  fontFamily: 'Arial' as string | null,
+  fontSize: 40 as number | null,
+  fontWeight: '400' as string | null,
+  fontStyle: 'normal' as string | null,
+})
+
+
+
 let _bound = false;
 
 let isPointerDown = false;
@@ -324,6 +341,46 @@ const curved = ref({
 
 const isCurvedActive = computed(() => activeObj.value && activeObj.value.customType === 'curvedText');
 
+function bindCanvasSelectionEvents(fCanvas) {
+  console.log("bindCanvasSelectionEvents called")
+  const syncActive = () => {
+    const obj = fCanvas.getActiveObject();
+    activeObj.value = obj || null;
+    if (obj && obj.customType === 'curvedText' && obj.curvedTextMeta) {
+      const m = obj.curvedTextMeta;
+      curved.value = {
+        text: m.text,
+        radius: m.radius,
+        letterSpacing: m.letterSpacing,
+        inward: m.inward,
+        clockwise: m.clockwise,
+        startAngle: m.startAngle ?? null,
+        fill: m.style.fill,
+        fontFamily: m.style.fontFamily,
+        fontSize: m.style.fontSize,
+        fontWeight: m.style.fontWeight,
+        fontStyle: m.style.fontStyle,
+        underline: m.style.underline,
+        stroke: m.style.stroke,
+        strokeWidth: m.style.strokeWidth,
+      };
+    }
+  };
+  fCanvas.on('selection:created', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:updated', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:cleared', () => { 
+    activeObj.value = null; 
+    hydrateStyleFromObject(null);
+  });
+}
 
 function fitZoomToFace() {
   // STEP 1: We won’t implement full zoom logic yet.
@@ -337,33 +394,62 @@ function fitZoomToFace() {
   if (canvas) fitZoomToFace()
 })*/
 
-onMounted(async () => {
+const canvasRef = ref(null);     // <canvas ref="canvasRef">
+const wrapRef = ref(null);       // wrapper <div ref="wrapRef">
 
-  // Example only—comment out if you already create a canvas elsewhere
+onMounted(async () => {
+  await nextTick() // ensure DOM has real sizes
+
+  // 1) Create Fabric with stable first-paint options
   canvas = new fabric.Canvas('canvasEl', {
     backgroundColor: 'white',
-    width: 800,
-    height: 600,
     selectionColor: 'blue',
     selectionLineWidth: 2,
     isDrawingMode: false,
-    preserveObjectStacking: true
+    preserveObjectStacking: true,
+    enableRetinaScaling: false,   // critical: avoid initial HiDPI mismatch
+    renderOnAddRemove: false      // we'll requestRenderAll() explicitly
   })
 
+  // 2) Give the canvas a *real* backing size based on its wrapper
+  const wrap = document.getElementById('canvasWrap')
+  if (wrap) {
+    const { width: w, height: h } = wrap.getBoundingClientRect()
+    const pxW = Math.max(1, Math.round(w))
+    const pxH = Math.max(1, Math.round(h))
+    canvas.setDimensions({ width: pxW, height: pxH }, { cssOnly: false })
+  } else {
+    // fallback to your previous defaults if wrapper not found
+    canvas.setDimensions({ width: 800, height: 600 }, { cssOnly: false })
+  }
+  canvas.calcOffset()
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+  canvas.setZoom(1)
+  canvas.requestRenderAll()
+
+  // 3) Apply your inches→pixels size (backing size again), then normalize
+  //    ⚠️ Ensure setCanvasSizeFromInches internally uses canvas.setDimensions({cssOnly:false})
   setCanvasSizeFromInches(props.initialWidthIn, props.initialHeightIn)
-  fitZoomToFace()
+  canvas.calcOffset()
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+  canvas.setZoom(1)
+
+  // 4) Draw grid and any initial art *after* size/transform are sane
   drawGrid(canvas)
+  gridVisible.value = true
+  refreshGrid()
+  canvas.requestRenderAll()
 
-  // --- your existing listeners ---
-  canvas.on('selection:created', updateSelectedObject);
-  canvas.on('selection:updated', updateSelectedObject);
-  canvas.on('selection:cleared', () => { 
-    Object.keys(selectedObject).forEach(key => delete selectedObject[key]);
-  });
+  // --- your existing listeners (kept as-is) ---
+  canvas.on('selection:created', updateSelectedObject)
+  canvas.on('selection:updated', updateSelectedObject)
+  canvas.on('selection:cleared', () => {
+    Object.keys(selectedObject).forEach(key => delete selectedObject[key])
+  })
 
-  canvas.on('selection:created', () => hasSelection.value = true)
-  canvas.on('selection:updated', () => hasSelection.value = true)
-  canvas.on('selection:cleared', () => hasSelection.value = false)
+  canvas.on('selection:created', () => (hasSelection.value = true))
+  canvas.on('selection:updated', () => (hasSelection.value = true))
+  canvas.on('selection:cleared', () => (hasSelection.value = false))
 
   canvas.on('object:moving', (e) => {
     if (!snapToGrid.value) return
@@ -371,29 +457,13 @@ onMounted(async () => {
     obj.set({
       left: Math.round(obj.left / 24) * 24,
       top: Math.round(obj.top / 24) * 24,
-    });
-  });
+    })
+  })
 
-  // --- [CurvedText] ADD these 2 lines to keep the panel in sync with curved groups ---
-  // handleSelection is the small helper from Step 2C that calls syncCurvedUIFrom(...)
-  canvas.on('selection:created', handleSelection)
-  canvas.on('selection:updated', handleSelection)
-  // (Optional) also handle cleared if you want to reset the panel:
-  // canvas.on('selection:cleared', () => { curvedUI.text = 'Your Curved Text' })
+  // 5) Observe wrapper size so layout changes never “blank” the canvas again
+  observeCanvasWrapperResize()
 
-canvas.on('mouse:down', () => { isPointerDown = true; });
-canvas.on('mouse:up', () => {
-  isPointerDown = false;
-  if (pendingCurvedReflow) {
-    reflowActiveCurved(pendingCurvedReflow);
-    pendingCurvedReflow = null;
-    canvas.requestRenderAll();
-  }
-});  
-
-  gridVisible.value = true
-  refreshGrid()
-  // Preload a small, versatile subset to avoid FOUT on first use
+  // 6) Preload fonts after first stable paint
   await preloadFonts([
     { family: 'Bebas Neue', weights: [400] },
     { family: 'Playfair Display', weights: [400, 700] },
@@ -401,7 +471,37 @@ canvas.on('mouse:up', () => {
     { family: 'Lora', weights: [400, 700] }
   ], 4)
 
-});
+  // Final paint to cover any async font/layout tweaks
+  canvas.requestRenderAll()
+  bindCanvasSelectionEvents(canvas);
+})
+
+function observeCanvasWrapperResize() {
+  const wrap = document.getElementById('canvasWrap')
+  if (!wrap) return
+
+  const ro = new ResizeObserver(() => {
+    const { width: w, height: h } = wrap.getBoundingClientRect()
+    const newW = Math.max(1, Math.round(w))
+    const newH = Math.max(1, Math.round(h))
+
+    if (canvas.getWidth() !== newW || canvas.getHeight() !== newH) {
+      canvas.setDimensions({ width: newW, height: newH }, { cssOnly: false })
+      canvas.calcOffset()
+
+      // keep transforms sane if something else messed with them
+      const vt = canvas.viewportTransform
+      if (!Array.isArray(vt) || vt[0] === 0) {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+        canvas.setZoom(1)
+      }
+
+      canvas.requestRenderAll()
+    }
+  })
+
+  ro.observe(wrap)
+}
 
 // Toggle button handler
 function onToggleDims () {
@@ -435,8 +535,7 @@ function inchesToPixels (inches) {
 function setCanvasSizeFromInches (widthIn, heightIn) {
   const wPx = inchesToPixels(formWidthIn)
   const hPx = inchesToPixels(formHeightIn)
-  canvas.setWidth(wPx)
-  canvas.setHeight(hPx)
+  canvas.setDimensions({ widthIn, heightIn }, { cssOnly: false })
   canvas.calcOffset()
   // if you draw a grid/rulers, refresh them here:
   // instance.proxy?.refreshGrid?.()
@@ -536,11 +635,38 @@ function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number,
 
 
 // Apply a style patch to ALL selected objects
-function applyStyleToSelection(patch) {
-  const objs = getActiveObjects();
-  if (!objs.length) return;
-  objs.forEach(o => applyStyleToObject(o, patch));
-  canvas.requestRenderAll();
+function applyStyleToSelection(style: Record<string, any>) {
+  const sel = canvas?.getActiveObject()
+  if (!sel) return
+
+  if (sel.type === 'activeSelection' && sel.forEachObject) {
+    sel.forEachObject((o: any) => {
+      if (isTextOnPathGroup(o)) {
+        updateTextOnPath(o, style)
+      } else {
+        o.set(style)
+        o.setCoords?.()
+      }
+    })
+    canvas.requestRenderAll()
+    return
+  }
+
+  if (isTextOnPathGroup(sel)) {
+    updateTextOnPath(sel, style)
+  } else {
+    sel.set(style)
+    sel.setCoords?.()
+    canvas.requestRenderAll()
+  }
+}
+
+function handlePropertiesStyleChange(patch: Record<string, any>) {
+  // Apply to canvas selection
+  applyStyleToSelection(patch)
+
+  // Also update local UI state so the panel stays in sync
+  Object.assign(styleState, patch)
 }
 
 function getSelectionTextObjects(): fabric.Object[] {
@@ -646,7 +772,7 @@ function onChangeFillColor(color) {
 }
 
 function updateCanvas() {
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function drawGrid(canvas) {
@@ -817,7 +943,7 @@ function deformText( selectedTextObject ){
   });
 
   canvas.add(curvedText);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 
 }
 
@@ -830,7 +956,7 @@ function addText() {
   });
   canvas.add(text);
   canvas.setActiveObject(text);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function addRectangle() {
@@ -845,7 +971,7 @@ function addRectangle() {
   });
   canvas.add(rect);
   canvas.setActiveObject(rect);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function addCircle() {
@@ -859,7 +985,7 @@ function addCircle() {
   });
   canvas.add(circle);
   canvas.setActiveObject(circle);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 
@@ -874,27 +1000,6 @@ const curvedUI = reactive({
   align: 'center', // 'start' | 'center' | 'end'
 });
 
-// === [CurvedText] add a new curved text group at canvas center ===
-function addCurvedText() {
-  if (!canvas) return;
-
-  const group = createCurvedText(curvedUI.text, curvedUI, {
-    left: canvas.getWidth() / 2,
-    top: canvas.getHeight() / 2,
-    fontFamily: 'Arial',
-    fontSize: 48,
-    fill: '#111111',
-    stroke: null,
-    strokeWidth: 0,
-  });
-
-  // Do NOT chain after add(); some Fabric versions return void here.
-  canvas.add(group);
-  if (typeof canvas.setActiveObject === 'function') {
-    canvas.setActiveObject(group);
-  }
-  canvas.requestRenderAll();
-}
 
 
 function curveSelectedText() {
@@ -1136,7 +1241,7 @@ function handleFileUpload(e) {
       img.set({ left: 100, top: 100, scaleX: 0.5, scaleY: 0.5 });
       canvas.add(img);
       canvas.setActiveObject(img);
-      canvas.renderAll();
+      canvas.requestRenderAll();
     });
   };
   reader.readAsDataURL(file);
@@ -1160,59 +1265,59 @@ function bringToFront() {
 
 
 function deleteSelected() {
-   obj = assignActiveObj();
+   const obj = assignActiveObj();
   if (obj) {
     canvas.remove(obj);
-    canvas.discardActiveObject(obj);
-    canvas.renderAll();
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
   }
 }
 
 function alignLeft() {
-  obj = assignActiveObj();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: 0 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignCenter() {
- obj = assignActiveObj();
+ const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: canvas.getWidth() / 2 - obj.getScaledWidth() / 2 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignRight() {
-  obj = assignActiveObj();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: canvas.getWidth() - obj.getScaledWidth() });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignTop() {
-  obj = assignActiveObj();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: 0 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignMiddle() {
-  obj = assignActiveObj();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: canvas.getHeight() / 2 - obj.getScaledHeight() / 2 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignBottom() {
-  obj = assignActiveObj();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: canvas.getHeight() - obj.getScaledHeight() });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
@@ -1220,7 +1325,7 @@ function groupObjects() {
   const active = canvas.getActiveObject();
   if (active && active.type === 'activeSelection') {
     active.toGroup();
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
@@ -1228,7 +1333,7 @@ function ungroupObjects() {
   const active = canvas.getActiveObject();
   if (active && active.type === 'group') {
     active.toActiveSelection();
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
@@ -1281,13 +1386,132 @@ function addBasePostForSign(signType) {
  
 }
 
-
-
 function assignActiveObj(){
   return canvas.getActiveObject();
 }
 // after creating gridGroup and canvas.add(gridGroup)
 moveToBackSafe(gridGroup, 0)
+
+
+
+function applyUserDimensions(widthIn, heightIn, ppi) {
+  const wPx = Math.max(1, Math.round(widthIn * ppi));
+  const hPx = Math.max(1, Math.round(heightIn * ppi));
+
+  canvas.setDimensions({ width: wPx, height: hPx }, { cssOnly: false });
+  canvas.calcOffset();
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  canvas.setZoom(1);
+  canvas.requestRenderAll();
+}
+
+const PATH_PRESETS = {
+  ArcUp: 'M 0 150 Q 150 0 300 150',
+  ArcDown: 'M 0 0 Q 150 150 300 0',
+  Wave: 'M 0 100 C 50 0, 100 200, 150 100 S 250 0, 300 100'
+};
+
+function addTextOnPath({
+  text = 'Your curved text',
+  pathD = PATH_PRESETS.ArcUp,
+  fontFamily = 'Arial',
+  fontSize = 48,
+  letterSpacing = 2,
+  startOffset = 0,
+  align = 'center',
+  flip = false
+} = {}) {
+  const group = createTextOnPath({ text, pathD, fontFamily, fontSize, letterSpacing, startOffset, align, flip });
+  group.set({ left: 50, top: 50 });
+  canvas.add(group);
+  canvas.setActiveObject(group);
+  canvas.requestRenderAll();
+}
+
+// If the selected object is a text-on-path group, update it
+function tweakSelectedTextOnPath(patch) {
+  const active = canvas.getActiveObject();
+  if (active?.data?.kind === 'text-on-path') {
+    updateTextOnPath(active, patch);
+  }
+}
+
+// After JSON load:
+function loadCanvasFromJson(json) {
+  canvas.loadFromJSON(json, () => {
+    // Optional pass to harden sub-object flags
+    canvas.getObjects().forEach(obj => rehydrateTextOnPath(obj));
+    canvas.renderAll();
+  });
+}
+
+function isTextOnPathGroup(obj: any) {
+  return obj?.data?.kind === 'text-on-path'
+    || (Array.isArray(obj?._objects) && obj._objects[0]?.type === 'path')
+}
+
+function handlePathTextChange(payload) {
+  const obj = canvas?.getActiveObject()
+  if (!obj || !isTextOnPathGroup(obj)) return
+  updateTextOnPath(obj, payload)  // 👈 payload has fill / stroke / strokeWidth now
+}
+
+function handlePathTextApply(payload) {
+  const obj = canvas?.getActiveObject()
+  if (!obj || !isTextOnPathGroup(obj)) return
+  updateTextOnPath(obj, payload)
+}
+
+function hydrateStyleFromObject(obj: any | null) {
+  console.log("hydrateStyleFromObject was called.")
+  if (!obj) {
+    console.log("hydrateStyleFromObject(obj: any | null) is !obj")
+    selectionKind.value = 'none'
+    return
+  }
+
+  selectionKind.value = getSelectionKind(obj)
+  console.log("hydrateStyleFromObject(obj: any | null) is an obj and its value is: "+selectionKind.value)
+  if (isTextOnPathGroup(obj) && obj.data?.options) {
+    const o = obj.data.options
+    styleState.fill = o.fill ?? styleState.fill
+    styleState.stroke = o.stroke ?? styleState.stroke
+    styleState.strokeWidth = o.strokeWidth ?? styleState.strokeWidth
+    styleState.fontFamily = o.fontFamily ?? styleState.fontFamily
+    styleState.fontSize = o.fontSize ?? styleState.fontSize
+    styleState.fontWeight = o.fontWeight ?? styleState.fontWeight
+    styleState.fontStyle = o.fontStyle ?? styleState.fontStyle
+  } else {
+    styleState.fill = obj.fill ?? styleState.fill
+    styleState.stroke = obj.stroke ?? styleState.stroke
+    styleState.strokeWidth = obj.strokeWidth ?? styleState.strokeWidth
+    styleState.fontFamily = obj.fontFamily ?? styleState.fontFamily
+    styleState.fontSize = obj.fontSize ?? styleState.fontSize
+    styleState.fontWeight = obj.fontWeight ?? styleState.fontWeight
+    styleState.fontStyle = obj.fontStyle ?? styleState.fontStyle
+  }
+}
+
+function getSelectionKind(obj: any) {
+   console.log("obj.isType') is "+obj.isType)
+  if (!obj) return 'none'
+
+  if (obj.data?.kind === 'text-on-path' ||
+      (Array.isArray(obj._objects) && obj._objects[0]?.type === 'path')) {
+    return 'text-on-path'
+  }
+
+  if (obj.isType?.('i-text') || obj.isType?.('text')) {
+    return 'text'
+  }
+
+  if (obj.isType?.('rect')) return 'rect'
+  if (obj.isType?.('circle')) return 'circle'
+
+  return 'generic'
+}
+
+
 
 </script>
 

@@ -1,78 +1,62 @@
-// resources/js/utils/normalizeTemplateForCanvas.js
-// Fallbacks for sign elements if not properly defined by the user 
-// to enforce minimus dimensional standards across sign elements.
+// resources/js/utils/templateUtils.ts (or .js)
+export function normalizeTemplateForCanvas(input: any) {
+  const t = input ?? {}
 
-export function normalizeTemplateForCanvas(template) {
-  if (!template || typeof template !== 'object') return {};
+  // Base dimensions may be on root or face; default to 0 if missing
+  const rootWidth  = isFiniteNumber(t.width)  ? t.width  : 0
+  const rootHeight = isFiniteNumber(t.height) ? t.height : 0
 
-  const normalized = {};
-  const faceDefaults = template.face || {};
-
-  // Normalize post
-  if (template.post) {
-    normalized.post = {
-      height: template.post.height || 3,
-      mount: ['bottom', 'side'].includes(template.post.mount)
-        ? template.post.mount
-        : 'bottom',
-      color: template.post.color || '#444444',
-    };
+  // Face (most sign types)
+  const face = {
+    width:  pickNumber(t?.face?.width,  rootWidth),
+    height: pickNumber(t?.face?.height, rootHeight),
+    shape:  t?.face?.shape ?? 'flat',
+    // safe edge defaults
+    borderWidthInches: pickNumber(t?.face?.borderWidthInches, 0),
+    borderColor: t?.face?.borderColor ?? '#000000',
+    fillColor:   t?.face?.fillColor   ?? '#ffffff',
   }
 
- if (template.cabinet) {
-    normalized.cabinet = {
-      height: template.post.height || 3,
-      mount: ['bottom', 'side'].includes(template.post.mount)
-        ? template.post.mount
-        : 'bottom',
-      color: template.post.color || '#444444',
-    };
-  }
+  // Cabinet (if present / relevant)
+  const cabinet = t.cabinet
+    ? {
+        width:  pickNumber(t.cabinet.width,  face.width),
+        height: pickNumber(t.cabinet.height, face.height),
+        depth:  pickNumber(t.cabinet.depth,  8),
+      }
+    : undefined
 
-  // Normalize cabinet
-  if (template.cabinet) {
-    normalized.cabinet = {
-      width: template.cabinet.width || 72,
-      height: template.cabinet.height || 36,
-      depth: template.cabinet.depth || 8,
-      fill: template.cabinet.fill || '#cccccc',
-      borderWidthInches: template.cabinet.borderWidthInches || 1.5,
-      material: template.cabinet.material || 'aluminum',
-    };
-  }
+  // Lighting (for illuminated types)
+  const lighting = t.lighting
+    ? {
+        type:      t.lighting.type      ?? 'led',
+        length:    pickNumber(t.lighting.length, 24),
+        uom:       t.lighting.uom       ?? 'inches',
+        structure: t.lighting.structure ?? 'tube',
+        count:     pickNumber(t.lighting.count, 1),
+      }
+    : undefined
 
-  // Normalize lighting
-  if (template.lighting) {
-    normalized.lighting = {
-      type: template.lighting.type || 'led',
-      length: template.lighting.length || 24,
-      uom: template.lighting.uom || 'inches',
-      structure: template.lighting.structure || 'tube',
-      count: template.lighting.count || 1,
-    };
-  }
+  // Post mount (monument / pylon)
+  const post = t.post
+    ? { mount: t.post.mount === 'side' ? 'side' : 'bottom' }
+    : undefined
 
-  // Normalize face
-  if (template.face) {
-    normalized.face = {
-      width: faceDefaults.width || template.cabinet.width-1.5,
-      height: faceDefaults.height || template.cabinet.height-1.5,
-      //add a border to mark "design area" inside retainer.
-      borderWidthInches: template.cabinet.borderWidthInches || 0.5,
-      fill: template.cabinet.fill || '#FFFFFFF',
-      borderColor: '#FF0000',
-      shape: faceDefaults.shape || 'flat',
-      material: faceDefaults.material || 'polycarbonate',
-    };
+  // Return normalized structure; include raw sign type if provided
+  return {
+    signType: t.signType ?? t.type ?? 'custom',
+    face,
+    cabinet,
+    lighting,
+    post,
+    // keep original in case callers need traceability
+    _source: 'normalized',
   }
+}
 
-  // Include template name and flags
-  if (template.template) {
-    normalized.template = template.template;
-  }
-  if ('illuminated' in template) {
-    normalized.illuminated = template.illuminated;
-  }
-
-  return normalized;
+function pickNumber(v: any, fallback: number) {
+  return isFiniteNumber(v) ? Number(v) : fallback
+}
+function isFiniteNumber(n: any) {
+  return typeof n === 'number' && Number.isFinite(n)
 }
