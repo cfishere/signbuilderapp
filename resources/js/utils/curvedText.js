@@ -1,282 +1,131 @@
-// ESM module for Fabric v6.x
-// Save this file as UTF-8 (no BOM)
+// utils/curvedText.js
+import { fabric } from '@/utils/fabricRef';
+/**
+ * Build a curved text group (one fabric.Text per glyph).
+ * Returns a fabric.Group with .curvedTextMeta and .customType='curvedText'.
+ */
+export function createCurvedTextGroup(text, opts = {}) {
+  const {
+    left = 0, top = 0, radius = 120,
+    clockwise = true, inward = false,
+    letterSpacing = 0, align = 'center',
+    fill = '#000', fontFamily = 'Arial', fontSize = 24,
+    fontWeight = 'normal', fontStyle = 'normal',
+    underline = false, stroke = null, strokeWidth = 0, shadow = null,
+    startAngle, // optional
+  } = opts;
 
-import * as fabric from 'fabric';
-
-const MIN_R = 1; // never let effective radius go to 0
-
-function nnum(v, fb) {
-  const x = Number(v);
-  return Number.isFinite(x) ? x : fb;
-}
-
-/** Measure per-glyph widths with an offscreen 2D context (avoids textBaseline issues) */
-function measureGlyphWidths(text, opts) {
-  const { fontFamily, fontSize, fontWeight, italic } = opts || {};
-  const off = document.createElement('canvas');
-  const ctx = off.getContext('2d');
-  const weight = fontWeight || 'normal';
-  const style  = italic ? 'italic ' : '';
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `${style}${weight} ${fontSize || 48}px ${fontFamily || 'Arial'}`;
-  const out = new Array(text.length);
-  for (let i = 0; i < text.length; i++) out[i] = ctx.measureText(text[i]).width;
-  return out;
-}
-
-/** Create a curved text group (letters as child objects). */
-export function createCurvedText(text, curve = {}, style = {}) {
-  text = typeof text === 'string' ? text : '';
-
-  // curve props
-  const radius     = curve.radius     != null ? curve.radius     : 150;
-  const startAngle = curve.startAngle != null ? curve.startAngle : 180;
-  const spacing    = curve.spacing    != null ? curve.spacing    : 0;
-  const clockwise  = curve.clockwise  != null ? !!curve.clockwise : true;
-  const inward     = curve.inward     != null ? !!curve.inward     : false;
-  const align      = curve.align || 'center';
-
-  // style props
-  const left       = style.left       != null ? style.left       : 200;
-  const top        = style.top        != null ? style.top        : 200;
-  const fontFamily = style.fontFamily || 'Arial';
-  const fontSize   = style.fontSize   != null ? style.fontSize   : 48;
-  const fontWeight = style.fontWeight || 'normal';
-  const italic     = !!style.italic;
-  const fill       = style.fill || '#000000';
-  const stroke     = style.stroke != null ? style.stroke : null;
-  const strokeWidth= style.strokeWidth != null ? style.strokeWidth : 0;
-
-  const widths = measureGlyphWidths(text, { fontFamily, fontSize, fontWeight, italic });
-
-  // normalize radius: negative radius flips the arc side
-  const rawRadius = nnum(radius, 150);
-  const spacingPx = nnum(spacing, 0);
-  const startA    = nnum(startAngle, 270);
-  const r = Math.max(MIN_R, Math.abs(rawRadius));
-  const startAngleNorm = startA + (rawRadius < 0 ? 180 : 0);
- 
- // total span. compute total arc span (degrees)
-  let totalWidth = 0;
-  for (let i = 0; i < widths.length; i++) totalWidth += widths[i];
-  totalWidth += Math.max(0, text.length - 1) * spacingPx;
-
-  const totalTheta = totalWidth / r;
-  const totalDeg   = Number.isFinite(totalTheta) ? (totalTheta * 180 / Math.PI) : 0;
-
-  let startDeg = startAngleNorm;
-  if (align === 'center') startDeg -= (clockwise ? 1 : -1) * (totalDeg / 2);
-  if (align === 'end')    startDeg -= (clockwise ? 1 : -1) *  totalDeg;
-
-  // build glyph objects
-  const letters = [];
-  let traveled = 0;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const w  = widths[i];
-
-    const theta = (traveled + w / 2) / r;
-    const degFromStart = (theta * 180 / Math.PI) * (clockwise ? 1 : -1);
-    const angleDeg = startDeg + (Number.isFinite(degFromStart) ? degFromStart : 0);
-    const rad = angleDeg * Math.PI / 180;
-
-    const x = left + Math.cos(rad) * r;
-    const y = top  + Math.sin(rad) * r;
-    const rotate = angleDeg + (clockwise ? 90 : -90) + (inward ? 180 : 0);
-
-    letters.push(new fabric.Text(ch, {
-      objectCaching: false,
-      left: x,
-      top: y,
-      originX: 'center',
-      originY: 'center',
-      angle: rotate,
-      fontFamily,
-      fontSize,
-      fontWeight,
-      fontStyle: italic ? 'italic' : 'normal',
-      fill,
-      stroke: strokeWidth > 0 ? (stroke != null ? stroke : fill) : null,
-      strokeWidth,
-      paintFirst: 'fill',
-      selectable: false,
-      evented: false,
-    }));
-
-    traveled += w + spacingPx;
+  const chars = Array.from(text || '');
+  if (!chars.length) {
+    const empty = new fabric.Group([], { left, top });
+    empty.customType = 'curvedText';
+    empty.curvedTextMeta = { text: '', left, top, radius, clockwise, inward, letterSpacing, align,
+      style: { fill, fontFamily, fontSize, fontWeight, fontStyle, underline, stroke, strokeWidth, shadow },
+      startAngle: startAngle ?? -90
+    };
+    return empty;
   }
 
-  const group = new fabric.Group(letters, {
-    left,
-    top,
-    objectCaching: false,
-    originX: 'center',
-    originY: 'center',
-    selectable: true,
-    evented: true,
-    hasBorders: true,
-    hasControls: true,
-    perPixelTargetFind: false,
-    lockScalingFlip: false,
+  // measure per-glyph width using fabric.Text (handles fonts correctly)
+  const measures = chars.map(ch => {
+    const t = new fabric.Text(ch, { fontFamily, fontSize, fontWeight, fontStyle });
+    return Math.max(t.width, fontSize * 0.3); // give space a minimal width
+  });
+  const extra = (chars.length - 1) * letterSpacing;
+  const totalWidth = measures.reduce((a, b) => a + b, 0) + extra;
+  const totalArcDeg = (totalWidth / radius) * (180 / Math.PI);
+
+  const sign = clockwise ? 1 : -1;
+  let _start = startAngle != null ? startAngle : (-90 - (clockwise ? -1 : 1) * (totalArcDeg / 2));
+  let ang = _start;
+  const nodes = [];
+
+  for (let i = 0; i < chars.length; i++) {
+    const w = measures[i];
+    // advance half glyph + spacing before placing
+    ang += sign * (((w / 2) + (i > 0 ? letterSpacing : 0)) / radius) * (180 / Math.PI);
+
+    const theta = ang * (Math.PI / 180);
+    const cx = left + radius * Math.cos(theta);
+    const cy = top + radius * Math.sin(theta);
+
+    const tangent = ang + (clockwise ? 90 : -90);
+    const charAngle = inward ? (tangent + 180) : tangent;
+
+    const node = new fabric.Text(chars[i], {
+      left: cx, top: cy, originX: 'center', originY: 'center',
+      angle: charAngle,
+      fill, fontFamily, fontSize, fontWeight, fontStyle, underline, stroke, strokeWidth, shadow,
+      selectable: true, evented: true
+    });
+    nodes.push(node);
+
+    // advance the remaining half glyph
+    ang += sign * ((w / 2) / radius) * (180 / Math.PI);
+  }
+
+  const group = new fabric.Group(nodes, {
+    originX: 'center', originY: 'center', left, top, hasRotatingPoint: true
   });
 
-  // make rotation control visible (Fabric v6)
-if (group.controls && group.controls.mtr) {
-  group.controls.mtr.visible = true;
-}
-
-  // persist props for later reflow / serialization
-  group.curved = { text, radius, startAngle, spacing, clockwise, inward, align };
-  group.textStyle = { fontFamily, fontSize, fontWeight, italic, fill, stroke, strokeWidth };
   group.customType = 'curvedText';
-
-  // v6-safe refresh
-  group.set('dirty', true);
-  group.setCoords();
-
-  // serialize custom props
-  const toObject = group.toObject.bind(group);
-  group.toObject = function(...args) {
-    return {
-      ...toObject(...args),
-      curved: { ...this.curved },
-      textStyle: { ...this.textStyle },
-      customType: this.customType,
-    };
+  group.curvedTextMeta = {
+    text, left, top, radius, clockwise, inward, letterSpacing, align,
+    style: { fill, fontFamily, fontSize, fontWeight, fontStyle, underline, stroke, strokeWidth, shadow },
+    startAngle: _start
   };
 
-  // Make rotate cursor a curved arrow just for this group
-if (group.controls?.mtr) {
-  const rotateCursor = `url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24'>\
-<path fill='%23000' d='M12 2a10 10 0 1 0 9.54 6.54h-2.1A8 8 0 1 1 12 4v3l4-4-4-4v3z'/>\
-</svg>") 12 12, auto`;
-  group.controls.mtr.cursorStyleHandler = () => rotateCursor;
-}
+  // Ensure JSON includes our meta so we can rebuild on load
+  const baseToObject = group.toObject.bind(group);
+  group.toObject = (props) => ({
+    ...baseToObject(props),
+    customType: 'curvedText',
+    curvedTextMeta: group.curvedTextMeta,
+  });
 
   return group;
 }
 
-
-
-/** Reflow an existing curvedText group IN PLACE (v6-safe). */
-export function reflowCurvedText(group, updates = {}) {
-  if (!group || !group.curved) return group;
-
-  // merge new props
-  const newCurved = { ...group.curved, ...(updates.curved || updates) };
-  if (typeof updates.text === 'string') newCurved.text = updates.text;
-  const newStyle  = { ...group.textStyle, ...(updates.textStyle || updates) };
-
-  // anchor at current center
-  const left = group.left;
-  const top  = group.top;
-
-  // read values
-  let text = newCurved.text || group.curved.text || '';
-  if (text.length === 0) text = ' '; // keep a visible placeholder so the group stays selectable  
-  const radius     = newCurved.radius     != null ? newCurved.radius     : 150;
-  const startAngle = newCurved.startAngle != null ? newCurved.startAngle : 270;
-  const spacing    = newCurved.spacing    != null ? newCurved.spacing    : 0;
-  const clockwise  = newCurved.clockwise  != null ? !!newCurved.clockwise : true;
-  const inward     = newCurved.inward     != null ? !!newCurved.inward     : false;
-  const align      = newCurved.align || 'center';
-
-  const fontFamily = newStyle.fontFamily || 'Arial';
-  const fontSize   = newStyle.fontSize   != null ? newStyle.fontSize   : 48;
-  const fontWeight = newStyle.fontWeight || 'normal';
-  const italic     = !!newStyle.italic;
-  const fill       = newStyle.fill || '#000000';
-  const stroke     = newStyle.stroke != null ? newStyle.stroke : null;
-  const strokeWidth= newStyle.strokeWidth != null ? newStyle.strokeWidth : 0;
-
-  const widths = measureGlyphWidths(text, { fontFamily, fontSize, fontWeight, italic });
-
-  // sanitize inputs
-  const rawRadius = nnum(radius, 150);
-  const spacingPx = nnum(spacing, 0);
-  const startA    = nnum(startAngle, 270);
-
-  // negative radius = flip side by +180°, use |radius| for geometry
-  const r = Math.max(MIN_R, Math.abs(rawRadius));
-  const startAngleNorm = startA + (rawRadius < 0 ? 180 : 0);
-
-  // recompute arc layout
-  let totalWidth = 0;
-  for (let i = 0; i < widths.length; i++) totalWidth += widths[i];
-  totalWidth += Math.max(0, text.length - 1) * spacingPx;
-
-  const totalTheta = totalWidth / r;
-  const totalDeg   = totalTheta * 180 / Math.PI;
-
-  let startDeg = startAngleNorm;
-  if (align === 'center') startDeg -= (clockwise ? 1 : -1) * (totalDeg / 2);
-  if (align === 'end')    startDeg -= (clockwise ? 1 : -1) *  totalDeg;
-
-  // build new glyphs
-  const newLetters = [];
-  let traveled = 0;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const w  = widths[i];
-    const theta = (traveled + w / 2) / r;
-    const degFromStart = (theta * 180 / Math.PI) * (clockwise ? 1 : -1);
-    const angleDeg = startDeg + degFromStart;
-    const rad = angleDeg * Math.PI / 180;
-
-    // ... inside the glyph loop:
-    const x = left + Math.cos(rad) * r;
-    const y = top  + Math.sin(rad) * r;  
-    const rotate = angleDeg + (clockwise ? 90 : -90) + (inward ? 180 : 0);
-
-    newLetters.push(new fabric.Text(ch, {
-      objectCaching: false,
-      left: x,
-      top: y,
-      originX: 'center',
-      originY: 'center',
-      angle: rotate,
-      fontFamily, fontSize, fontWeight,
-      fontStyle: italic ? 'italic' : 'normal',
-      fill,
-      stroke: strokeWidth > 0 ? (stroke != null ? stroke : fill) : null,
-      strokeWidth,
-      paintFirst: 'fill',
-      selectable: false,
-      evented: false,
-    }));
-
-    traveled += w + spacingPx;
-  }
-
-  // replace children using public API (v6)
-  const existing = group.getObjects();
-  existing.slice().forEach(o => group.remove(o));
-  group.add(...newLetters);
-
-  // update stored props
-  group.curved = { text, radius, startAngle, spacing, clockwise, inward, align };
-  group.textStyle = { fontFamily, fontSize, fontWeight, italic, fill, stroke, strokeWidth };
-
-  // mark dirty & refresh
-  group.set({ left, top, objectCaching: false});
-  group.set('dirty', true);
-  group.setCoords();
-
+/**
+ * Reflow an existing curvedText group after edits.
+ * Keeps left/top/angle; replaces children with recalculated glyphs.
+ */
+export function updateCurvedTextGroup(group, patch = {}) {
+  if (!group || group.customType !== 'curvedText') return group;
+  const meta = { ...(group.curvedTextMeta || {}), ...patch };
+  const { left, top, angle } = group;
   const canvas = group.canvas;
+
+  // build a fresh group
+  const g2 = createCurvedTextGroup(meta.text, {
+    ...meta,
+    // honor current left/top from transform
+    left, top
+  });
+  g2.angle = angle;
+
   if (canvas) {
-    if (canvas.getActiveObject() !== group) canvas.setActiveObject(group);
+    canvas.remove(group);
+    canvas.add(g2);
+    canvas.setActiveObject(g2);
     canvas.requestRenderAll();
   }
-  return group;
+  return g2;
 }
 
-
-/** Apply stroke consistently (width 0 => no stroke), then reflow. */
-export function applyStrokeToCurved(group, strokeColor, strokeWidth) {
-  if (!group || !group.curved) return group;
-  const sw = Number(strokeWidth) || 0;
-  group.textStyle.stroke = sw > 0 ? strokeColor : null;
-  group.textStyle.strokeWidth = sw;
-  return reflowCurvedText(group, { textStyle: group.textStyle });
+/**
+ * Reviver to rebuild curvedText from JSON.
+ * Use in canvas.loadFromJSON(json, cb, reviver).
+ */
+export function curvedTextReviver(obj, callback) {
+  if (obj.customType === 'curvedText' && obj.curvedTextMeta) {
+    const g = createCurvedTextGroup(obj.curvedTextMeta.text, obj.curvedTextMeta);
+    g.set({
+      left: obj.left, top: obj.top, scaleX: obj.scaleX, scaleY: obj.scaleY, angle: obj.angle,
+      flipX: obj.flipX, flipY: obj.flipY, opacity: obj.opacity
+    });
+    callback && callback(g);
+  } else {
+    callback && callback(null);
+  }
 }

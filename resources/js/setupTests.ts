@@ -1,6 +1,8 @@
 import { config } from '@vue/test-utils';
 import { vi } from 'vitest';
 import { createRouter, createWebHistory } from 'vue-router';
+import './tests/setup/mock-fabric'      // the ONLY vi.mock('fabric') lives here
+import './tests/setup/svg-canvas-mocks' // DOM/canvas/SVG helpers
 /*import axios from 'axios';
 
 vi.mock('axios', () => ({
