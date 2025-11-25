@@ -1,6 +1,5 @@
-import { fabric } from '@/utils/fabricRef'  // <-- default import (NOT destructured)
-
-
+// resources/js/utils/textOnPath.js
+import { fabric } from '@/utils/fabricRef'
 
 /**
  * Build an offscreen SVG <path> that we can use for length/point/tangent math.
@@ -58,9 +57,7 @@ export function createTextOnPath(opts) {
     fontSize = 40,
     fontWeight = 'normal',
     fontStyle = 'normal',
-    fill = '#111',
-    stroke = null,
-    strokeWidth = 0,
+    fill = '#999999',
     opacity = 1,
     letterSpacing = 0,
     startOffset = 0,
@@ -89,9 +86,6 @@ export function createTextOnPath(opts) {
     objectCaching: true
   });
 
-  const resolvedStroke = (strokeWidth > 0 && (stroke == null || stroke === 'transparent'))
- ? fill  : stroke
-
   const glyphs = [];
   for (let i = 0; i < text.length; i++) {
     const w = widths[i];
@@ -101,12 +95,7 @@ export function createTextOnPath(opts) {
     glyphs.push(new fabric.Text(text[i], {
       left: x, top: y, angle,
       originX: 'center', originY: 'center',
-      fontFamily, fontSize, fontWeight, fontStyle, fill, stroke, strokeWidth,
-       strokeUniform: true,            // keep stroke width constant under scaling
-       paintFirst: 'stroke',           // render stroke first, then fill (crisper)
-       strokeLineJoin: 'round',
-       strokeLineCap: 'round',
-       opacity,
+      fontFamily, fontSize, fontWeight, fontStyle, fill, opacity,
       selectable: false, evented: false, objectCaching: true
     }));
     cursor += w + letterSpacing;
@@ -124,22 +113,12 @@ export function createTextOnPath(opts) {
     kind: 'text-on-path',
     version: 1,
     options: {
-     text, pathD, fontFamily, fontSize, fontWeight, fontStyle,
-     fill,
-     stroke: resolvedStroke,
-     strokeWidth,
-     opacity,
-      letterSpacing, startOffset, align, flip, debug
+      text, pathD, fontFamily, fontSize, fontWeight, fontStyle,
+      fill, opacity, letterSpacing, startOffset, align, flip, debug
     }
   };
- // 1) normal Fabric path
-group.set('data', meta);
- // 2) direct property (some mocks don’t honor .set on arbitrary keys)
- group.data = meta;
- // 3) defineProperty to guarantee it’s enumerable on the instance
- Object.defineProperty(group, 'data', {
-   value: meta, writable: true, enumerable: true, configurable: true
- });
+  group.set('data', meta); // some environments honor this
+  group.data = meta;       // mocks sometimes require direct assign
 
   const origToObject = group.toObject.bind(group);
   group.toObject = function (additionalProps = []) {

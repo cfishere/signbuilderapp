@@ -1,39 +1,41 @@
 <template>
   <div class="w-full min-h-screen bg-white">
-
+    
     <header class="max-w-[1400px] mx-auto px-4">
       <div class="grid grid-cols-12 gap-4 pt-6">
         <!-- left spacer matches sidebar width -->
         <div class="col-span-12 lg:col-span-3"></div>
-        <h1 class="col-span-12 text-2xl font-semibold text-center lg:col-span-9 sm:text-3xl">
+        <h1 class="col-span-12 lg:col-span-9 text-center text-2xl sm:text-3xl font-semibold">
           <!-- Keep your HxW header; pull values from your current props/state -->
-          Sign Face ({{ formHeightIn }} x {{ formWidthIn }} inches)
+          Sign Face {{ formHeightIn }} x {{ formWidthIn }} (inches)
         </h1>
       </div>
+  
+     
     </header>
 
     <!-- ROW 2: Sidebar + Canvas -->
     <main class="max-w-[1400px] mx-auto px-4">
       <div class="grid grid-cols-12 gap-6 py-6">
         <!-- SIDEBAR (Left) -->
-        <aside class="col-span-12 space-y-6 lg:col-span-3">
+        <aside class="col-span-12 lg:col-span-3 space-y-6">
           <!-- Product / Sign info card -->
-          <section class="p-4 border shadow-sm rounded-xl">
-            <div class="flex items-center justify-center">
+          <section class="border rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-center mb-4">
               <!-- If you already compute a thumbnail, keep using it; otherwise swap this binding -->
-              <img :src="thumbnailSrc" alt="Sign type thumbnail" class="object-contain h-20" />
+              <img :src="thumbnailSrc" alt="Sign type thumbnail" class="h-20 object-contain" />
             </div>
 
                <!-- Settings panel -->
-   <!--  <aside class="p-4 space-y-4 bg-white border-r w-80 shrink-0"> -->
-      <h2 class="text-lg font-semibold mb-3">Design Settings</h2>
+   <!--  <aside class="w-80 shrink-0 border-r p-4 space-y-4 bg-white"> -->
+      <h2 class="text-lg font-semibold mb-2 text-center">Design Settings</h2>
 
       <!-- Sign Type -->
-      <label class="block text-sm font-medium">
+      <label class="block font-semibold mb-4">
         Sign Type
         <select
           v-model="signType"
-          class="w-full p-2 mt-1 border rounded"
+          class="mt-2 w-full rounded border p-2"
           aria-label="Sign type"
         >
           <option v-for="opt in signTypeOptions" :key="opt.value" :value="opt.value">
@@ -43,8 +45,9 @@
       </label>
 
       <!-- Dimensions -->
-<div class="space-y-3 mt-4">
-    <div class="grid grid-cols-2 gap-2">      
+<div class="space-y-3">
+  <h4 class="font-semibold mx-2">Sign Dimensions</h4>
+    <div class="grid grid-cols-2 gap-2">
       <label class="text-sm">Height (in)</label>
       <input
         type="number"
@@ -52,7 +55,7 @@
         step="0.25"
         v-model.number="formHeightIn"
         :disabled="!editingDims"
-        class="w-full px-2 py-1 border rounded disabled:bg-gray-100"
+        class="border rounded px-2 py-1 w-full disabled:bg-gray-100"
       />
       <label class="text-sm">Width (in)</label>
       <input
@@ -61,25 +64,25 @@
         step="0.25"
         v-model.number="formWidthIn"
         :disabled="!editingDims"
-        class="w-full px-2 py-1 border rounded disabled:bg-gray-100"
-      />
+        class="border rounded px-2 py-1 w-full disabled:bg-gray-100"
+      />      
     </div>
 
     <button
       @click="onToggleDims()"
-      class="px-3 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
+      class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
     >
       {{ editingDims ? 'Save Dimensions' : 'Change Dimensions' }}
     </button>
 
-    <p v-if="dimError" class="text-sm text-red-600">{{ dimError }}</p>
+    <p v-if="dimError" class="text-red-600 text-sm">{{ dimError }}</p>
   </div>
 
   <p class="text-xs text-gray-600">
         Current face: <span class="font-medium">{{ sizeLabel }}</span>
       </p>
 
-<!--
+<!-- 
 
       <div class="grid grid-cols-2 gap-3">
         <label class="block text-sm font-medium">
@@ -91,7 +94,7 @@
             min="1"
             :value="widthIn"
             @input="onWidthInput"
-            class="w-full p-2 mt-1 border rounded"
+            class="mt-1 w-full rounded border p-2"
             aria-label="Width in inches"
           />
         </label>
@@ -105,7 +108,7 @@
             min="1"
             :value="heightIn"
             @input="onHeightInput"
-            class="w-full p-2 mt-1 border rounded"
+            class="mt-1 w-full rounded border p-2"
             aria-label="Height in inches"
           />
         </label>
@@ -116,44 +119,52 @@
       </p> -->
           </section>
 
-          <!-- Auth / Designs panel always visible (no drawer toggle needed) -->
-          <section class="p-4 border shadow-sm rounded-xl">
+       <ObjectPropertiesPanel
+          class="mt-4"
+          :hasSelection="!!hasSelection"
+          :kind="selectionKind"
+          :styleState="styleState"
+          :fonts="availableFonts"  
+          :path-meta="selectionState.pathMeta"
+          @font-family="onChangeFontFamily" 
+         @change-style="handlePropertiesStyleChange"
+        @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
+        @path-text-apply="(opts) => tweakSelectedTextOnPath(opts)"
+        />
 
-
-              <p class="mb-3 text-sm text-gray-600">
+          <!-- Auth / Designs panel always visible -->
+          <section class="border rounded-xl p-4 shadow-sm">
+           
+           
+              <p class="text-sm text-gray-600 mb-3">
                 Please log in or create an account to save and edit designs.
               </p>
               <div class="flex gap-3">
-                <Link href="/login" method="post" as="button" class="flex-1 px-3 py-2 text-center border rounded-lg hover:bg-gray-50">Login</Link>
-                <small>Don't have an account?</small>
-                <Link href="/register" method="post" as="button" class="flex-1 px-3 py-2 text-center border rounded-lg hover:bg-gray-50">Register</Link>
+                <Link href="/login" method="post" as="button" class="flex-1 border rounded-lg px-3 py-2 text-center hover:bg-gray-50">Login</Link>
+                <small>Don't have an account?</small>               
+                <Link href="/register" method="post" as="button" class="flex-1 border rounded-lg px-3 py-2 text-center hover:bg-gray-50">Register</Link>
               </div>
-
+           
           </section>
         </aside>
 
       <!-- CANVAS STAGE (Right) -->
-<section class="relative col-span-12 p-3 border shadow-sm lg:col-span-9 rounded-xl">
-  <!-- Canvas container -->
-  <div ref="stage" class="relative bg-white border rounded-lg">
-    <div class="absolute inset-0 pointer-events-none"></div>
-    <canvas ref="canvasEl" id="canvasEl" class="block w-full h-full"></canvas>
-  </div>
+<section class="col-span-12 lg:col-span-9 border rounded-xl shadow-sm p-3 relative">
 
   <!-- TOOLBAR: directly beneath canvas, horizontal -->
-  <div class="sticky z-10 p-2 mt-3 border rounded-xl bg-white/90 backdrop-blur md:static bottom-3">
-    <DesignerToolsPanel
-  :showDrawer="false"
+  <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2
+              sticky md:static bottom-3 z-10">
+    <DesignerToolsPanel  
   :snapToGrid="snapToGrid"
-  :hasSelection="hasSelection"
+  :hasSelection="hasSelection"  
   :gridVisible="gridVisible"
-  :fonts="availableFonts"
-  @font-family="onChangeFontFamily"
   @toggle-snap="(val) => snapToGrid = val"
   @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
   @add-text="addText"
+  @add-curved-text="addTextOnPath"     
   @add-rectangle="addRectangle"
   @add-circle="addCircle"
+  @start-line-tool="beginLineDrawMode"
   @upload-image="uploadImage"
   @bring-to-front="bringToFront"
   @send-to-back="sendToBack"
@@ -165,33 +176,25 @@
   @align-middle="alignMiddle"
   @align-bottom="alignBottom"
   @group="groupObjects"
-  @ungroup="ungroupObjects"
-  @file-upload="handleFileUpload"
-  @stroke-width="onChangeStrokeWidth"
-  @stroke-color="onChangeStrokeColor"
-  @stroke-clear="onClearStroke"
-  @fill-color="onChangeFillColor"
-  @text-style-change="applyTextStyleToActive"
-  @path-text-add="(opts) => addTextOnPath(opts)"
-  @path-text-apply="(opts) => tweakSelectedTextOnPath(opts)"
-  @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
+  @ungroup="ungroupObjects"  
+  @file-upload="handleFileUpload"    
+  :fonts="availableFonts"  
 />
+
   </div>
 
-  <ObjectPropertiesPanel
-  class="mt-4"
-  :hasSelection="!!hasSelection"
-  :kind="selectionKind"
-  :styleState="styleState"
-  :fonts="availableFonts"
-  @font-family="onChangeFontFamily"
-  @change-style="handlePropertiesStyleChange"
-/>
+  <!-- Canvas container -->
+  <div ref="stage" class="relative bg-white border rounded-lg">
+    <!-- <div class="absolute inset-0 pointer-events-none"></div> -->
+    <canvas ref="canvasEl" id="canvasEl" class="w-full h-full block mx-auto"></canvas>
+  </div>
+  
+ 
 </section>
 </div>
     </main>
 
-
+  
 
 
 
@@ -206,14 +209,15 @@ import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted, reactive, g
 import { useDesignerRouteGuard } from '@/composables/useDesignerRouteGuard';
 import { ensureFontLoaded, preloadFonts } from '@/utils/fontLoader'
 import axios from 'axios';
-import UserDesignPanel from '@/Components/UserDesignPanel.vue';
+/*import UserDesignPanel from '@/Components/UserDesignPanel.vue';*/
 import DesignerToolsPanel from '@/Components/DesignerToolsPanel.vue';
 import ObjectPropertiesPanel from '@/Components/ObjectPropertiesPanel.vue'
-import { drawPost, drawCabinet, drawFace, drawLighting } from '@/utils/canvasDrawUtils'
-import { signTemplates } from '@/templates/signTemplates';
-import { fabric } from '@/utils/fabricRef'
-import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
+import { drawPost, drawCabinet, drawFace, drawLighting } from '@/utils/canvasDrawUtils';
 import { createTextOnPath, updateTextOnPath, rehydrateTextOnPath } from '@/utils/textOnPath';
+import { signTemplates } from '@/templates/signTemplates';
+import { fabric } from '@/utils/fabricRef';
+import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
+import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
 import { applyFontFamily } from '@/utils/applyFontFamily'
 
 
@@ -224,7 +228,13 @@ async function onFontFamilyChange(family: string) {
   canvas.requestRenderAll()
 }
 
+let canvas;
+
 document.fonts.check('1em "Story Script"')
+
+//check fabric version:
+console.log("Fabric version is: "+fabric.version)
+
 
 const isChannelLetter = computed(() => signType.value === 'channel_letter')
 // Fonts to show in the dropdown:
@@ -247,7 +257,10 @@ const page = usePage()
 const props = defineProps({
   initialWidthIn: { type: Number, default: 48 },   // 48" wide default
   initialHeightIn: { type: Number, default: 24 },  // 24" high default
-  ppi: { type: Number, default: 10 }        // 10 px per inch display scale
+  ppi: { type: Number, default: 10 },      // 10 px per inch display scale
+  canvas: Object,
+  activeObject: Object,
+  hasSelection: Boolean
 }) //end mod
 
 // local state
@@ -256,6 +269,11 @@ const formWidthIn = ref(props.initialWidthIn)
 const formHeightIn = ref(props.initialHeightIn)
 const dimError = ref('')
 
+// --- Line tool state ---
+const currentTool = ref<'none' | 'line'>('none')
+let isDrawingLine = false
+let activeLine: fabric.Line | null = null
+let lineStart = { x: 0, y: 0 }
 
 /*const template = signTemplates[props.signType];*/
 const canvasEl = ref(null)
@@ -263,31 +281,18 @@ const fileInput = ref(null)
 
 const snapToGrid = ref(false)
 const selectedObject = reactive({})
-const showDrawer = ref(false)
+/*const showDrawer = ref(false)*/
 let totalHeight = 0
-const activeobj = ref(null);
+const activeObj = ref(null);
 
 /** canvas + layout */
-let canvas
+/*let canvas*/
 const viewport = reactive({ w: 1200, h: 620 }) // updated on mount/resize
 const pad = 40 // screen-pixel padding around the face when fitting
 const hasSelection = ref(false)
-let _bound = false;
-// Add a sine-ish wave path preset for curved text
-const PATH_PRESETS = {
-  ArcUp: 'M 0 150 Q 150 0 300 150',
-  ArcDown: 'M 0 0 Q 150 150 300 0',
-  Wave: 'M 0 100 C 50 0, 100 200, 150 100 S 250 0, 300 100'
-};
+const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')
 
-
-/** optional: thumbnail from templates */
-const thumbnailSrc = computed(() =>
-  signTemplates[signType.value]?.thumbnail ?? 'img/sign-types/_placeholder.png'
-)
-//track selected object 'type' for our obj properties tool panel.
-//Note: Pass these as props to a new ObjectPropertiesPanel component
-const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'generic'>('none')
+const SHADOW_KEYS = ['shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY']
 const styleState = reactive({
   fill: '#000000' as string | null,
   stroke: null as string | null,
@@ -297,6 +302,17 @@ const styleState = reactive({
   fontWeight: '400' as string | null,
   fontStyle: 'normal' as string | null,
 })
+
+let _bound = false;
+
+let isPointerDown = false;
+let pendingCurvedReflow = null;
+
+/** optional: thumbnail from templates */
+const thumbnailSrc = computed(() =>
+  signTemplates[signType.value]?.thumbnail ?? 'img/sign-type/placeholder.png'
+)
+
 /**
  * Restrict to numeric inches (supports decimals), min 1
  * - For step 1 we keep it simple; we’ll add per-type maxes later.
@@ -321,7 +337,122 @@ const signTypeOptions = computed(() =>
 // Simple inline “units” helper text
 const sizeLabel = computed(() => `${formHeightIn.value}\" × ${formWidthIn.value}\"`)
 
+const curved = ref({
+  text: 'Your Curved Text',
+  radius: 150,
+  letterSpacing: 0,
+  inward: false,
+  clockwise: true,
+  startAngle: null, // null = auto-center
+  // style:
+  fill: '#2563eb',          // blue-600 default
+  fontFamily: 'Arial',
+  fontSize: 32,
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  underline: false,
+  stroke: null,
+  strokeWidth: 0,
+});
 
+const isCurvedActive = computed(() => activeObj.value && activeObj.value.customType === 'curvedText');
+const selectionState = reactive({
+  kind: 'none',
+  // ...
+  pathMeta: null as any | null,
+})
+
+
+function bindCanvasSelectionEvents(fCanvas) {
+  console.log("bindCanvasSelectionEvents called")
+  const syncActive = () => {
+    const obj = fCanvas.getActiveObject();
+    activeObj.value = obj || null;
+    if (obj && obj.customType === 'curvedText' && obj.curvedTextMeta) {
+      const m = obj.curvedTextMeta;
+      curved.value = {
+        text: m.text,
+        radius: m.radius,
+        letterSpacing: m.letterSpacing,
+        inward: m.inward,
+        clockwise: m.clockwise,
+        startAngle: m.startAngle ?? null,
+        fill: m.style.fill,
+        fontFamily: m.style.fontFamily,
+        fontSize: m.style.fontSize,
+        fontWeight: m.style.fontWeight,
+        fontStyle: m.style.fontStyle,
+        underline: m.style.underline,
+        stroke: m.style.stroke,
+        strokeWidth: m.style.strokeWidth,
+      };
+    }
+  };
+  fCanvas.on('selection:created', (e) => {
+    /*console.log("e.selected[0] is: "+e.selected[0])
+    console.log("Calling hydrateStyleFromObject, passing  e.selected[0]")*/
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    onSelectionChange
+    syncActive;
+    
+  });
+  fCanvas.on('selection:updated', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    onSelectionChange
+    syncActive;
+    
+  });
+  fCanvas.on('selection:cleared', () => { 
+    onSelectionClear
+    activeObj.value = null; 
+    hydrateStyleFromObject(null);
+  });
+}
+
+
+
+
+
+function bindCanvasSelectionEvents(fCanvas) {
+  console.log("bindCanvasSelectionEvents called")
+  const syncActive = () => {
+    const obj = fCanvas.getActiveObject();
+    activeObj.value = obj || null;
+    if (obj && obj.customType === 'curvedText' && obj.curvedTextMeta) {
+      const m = obj.curvedTextMeta;
+      curved.value = {
+        text: m.text,
+        radius: m.radius,
+        letterSpacing: m.letterSpacing,
+        inward: m.inward,
+        clockwise: m.clockwise,
+        startAngle: m.startAngle ?? null,
+        fill: m.style.fill,
+        fontFamily: m.style.fontFamily,
+        fontSize: m.style.fontSize,
+        fontWeight: m.style.fontWeight,
+        fontStyle: m.style.fontStyle,
+        underline: m.style.underline,
+        stroke: m.style.stroke,
+        strokeWidth: m.style.strokeWidth,
+      };
+    }
+  };
+  fCanvas.on('selection:created', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:updated', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:cleared', () => { 
+    activeObj.value = null; 
+    hydrateStyleFromObject(null);
+  });
+}
 
 function fitZoomToFace() {
   // STEP 1: We won’t implement full zoom logic yet.
@@ -331,44 +462,70 @@ function fitZoomToFace() {
 
 // For now, just call fitZoom stub if a canvas exists.
 /*watch([widthIn, heightIn, signType], () => {
-
+  
   if (canvas) fitZoomToFace()
 })*/
 
-onMounted(async () => {
+const canvasRef = ref(null);     // <canvas ref="canvasRef">
+const wrapRef = ref(null);       // wrapper <div ref="wrapRef">
 
-  // Example only—comment out if you already create a canvas elsewhere
+onMounted(async () => {
+  await nextTick() // ensure DOM has real sizes
+
+  // 1) Create Fabric with stable first-paint options
   canvas = new fabric.Canvas('canvasEl', {
     backgroundColor: 'white',
-    width: inchesToPixels(props.initialWidthIn),
-    height: inchesToPixels(props.initialHeightIn),
     selectionColor: 'blue',
     selectionLineWidth: 2,
     isDrawingMode: false,
-    preserveObjectStacking: true
+    preserveObjectStacking: true,
+    enableRetinaScaling: false,   // critical: avoid initial HiDPI mismatch
+    renderOnAddRemove: false      // we'll requestRenderAll() explicitly
   })
 
-  /*setCanvasSizeFromInches(props.initialWidthIn, props.initialHeightIn)*/
-  fitZoomToFace()
-  drawGrid(canvas)
+  // 2) Give the canvas a *real* backing size based on its wrapper
+  const wrap = document.getElementById('canvasWrap')
+  if (wrap) {
+    const { width: w, height: h } = wrap.getBoundingClientRect()
+    const pxW = Math.max(1, Math.round(w))
+    const pxH = Math.max(1, Math.round(h))
+    canvas.setDimensions({ width: pxW, height: pxH }, { cssOnly: false })
+  } else {
+    // fallback to your previous defaults if wrapper not found
+    canvas.setDimensions({ width: 800, height: 600 }, { cssOnly: false })
+  }
+  canvas.calcOffset()
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+  canvas.setZoom(1)
+  canvas.requestRenderAll()
 
-  // --- your existing listeners ---
-  canvas.on('selection:created', (e) => {
-    updateSelectedObject
-    hydrateStyleFromObject(e.selected?.[0] ?? null)
-  });
-  canvas.on('selection:updated', (e) => {
-    updateSelectedObject
-    hydrateStyleFromObject(e.selected?.[0] ?? null)
-  });
+  // 3) Apply your inches→pixels size (backing size again), then normalize
+  //    ⚠️ Ensure setCanvasSizeFromInches internally uses canvas.setDimensions({cssOnly:false})
+  setCanvasSizeFromInches(props.initialWidthIn, props.initialHeightIn)
+  canvas.calcOffset()
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+  canvas.setZoom(1)
+
+  // 4) Draw grid and any initial art *after* size/transform are sane
+  drawGrid(canvas)
+  gridVisible.value = true
+  refreshGrid()
+  canvas.requestRenderAll()
+
+  // --- your existing listeners (kept as-is) ---
+  canvas.on('selection:created', updateSelectedObject)
+  canvas.on('selection:updated', updateSelectedObject)
   canvas.on('selection:cleared', () => {
     Object.keys(selectedObject).forEach(key => delete selectedObject[key])
-    hydrateStyleFromObject(null)
-  });
+  })
 
-  canvas.on('selection:created', () => hasSelection.value = true)
-  canvas.on('selection:updated', () => hasSelection.value = true)
-  canvas.on('selection:cleared', () => hasSelection.value = false)
+  canvas.on('selection:created', () => (hasSelection.value = true))
+  canvas.on('selection:updated', () => (hasSelection.value = true))
+  canvas.on('selection:cleared', () => (hasSelection.value = false))
+  //for line drawing.
+  canvas.on('mouse:down', handleCanvasMouseDown)
+  canvas.on('mouse:move', handleCanvasMouseMove)
+  canvas.on('mouse:up', handleCanvasMouseUp)
 
   canvas.on('object:moving', (e) => {
     if (!snapToGrid.value) return
@@ -376,13 +533,13 @@ onMounted(async () => {
     obj.set({
       left: Math.round(obj.left / 24) * 24,
       top: Math.round(obj.top / 24) * 24,
-    });
-  });
+    })
+  })
 
+  // 5) Observe wrapper size so layout changes never “blank” the canvas again
+  observeCanvasWrapperResize()
 
-  gridVisible.value = true
-  refreshGrid()
-  // Preload a small, versatile subset to avoid FOUT on first use
+  // 6) Preload fonts after first stable paint
   await preloadFonts([
     { family: 'Bebas Neue', weights: [400] },
     { family: 'Playfair Display', weights: [400, 700] },
@@ -390,7 +547,73 @@ onMounted(async () => {
     { family: 'Lora', weights: [400, 700] }
   ], 4)
 
-});
+  // Final paint to cover any async font/layout tweaks
+  canvas.requestRenderAll()
+  bindCanvasSelectionEvents(canvas);
+})
+
+//iterate over all txt glyphs for text on path to apply style change
+function forEachTextGlyphInPathGroup(group: any, cb: (glyph: any) => void) {
+  if (!group || !group._objects) return
+
+  group._objects.forEach((o: any) => {
+    if (o.type === 'i-text' || o.type === 'textbox' || o.type === 'text') {
+      cb(o)
+    }
+  })
+}
+
+
+function syncStyleStateFromObject(obj: fabric.Object) {
+  styleState.value = {
+    fill: obj.get('fill') as string | null,
+    stroke: obj.get('stroke') as string | null,
+    strokeWidth: obj.get('strokeWidth') as number | undefined,
+    fontFamily: (obj as any).fontFamily ?? null,
+    fontSize: (obj as any).fontSize ?? null,
+    fontWeight: (obj as any).fontWeight ?? null,
+    fontStyle: (obj as any).fontStyle ?? null,
+    shadow: obj.shadow
+      ? {
+          color: obj.shadow.color,
+          blur: obj.shadow.blur,
+          offsetX: obj.shadow.offsetX,
+          offsetY: obj.shadow.offsetY
+        }
+      : null
+  }
+}
+
+
+
+
+
+function observeCanvasWrapperResize() {
+  const wrap = document.getElementById('canvasWrap')
+  if (!wrap) return
+
+  const ro = new ResizeObserver(() => {
+    const { width: w, height: h } = wrap.getBoundingClientRect()
+    const newW = Math.max(1, Math.round(w))
+    const newH = Math.max(1, Math.round(h))
+
+    if (canvas.getWidth() !== newW || canvas.getHeight() !== newH) {
+      canvas.setDimensions({ width: newW, height: newH }, { cssOnly: false })
+      canvas.calcOffset()
+
+      // keep transforms sane if something else messed with them
+      const vt = canvas.viewportTransform
+      if (!Array.isArray(vt) || vt[0] === 0) {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+        canvas.setZoom(1)
+      }
+
+      canvas.requestRenderAll()
+    }
+  })
+
+  ro.observe(wrap)
+}
 
 // Toggle button handler
 function onToggleDims () {
@@ -422,16 +645,12 @@ function inchesToPixels (inches) {
 }
 
 function setCanvasSizeFromInches (widthIn, heightIn) {
-  /*console.log("setCanvasSizeFromInches called: width and height passed are "+widthIn+", "+heightIn+".")*/
-  const wPx = inchesToPixels(formWidthIn.value)  
-  const hPx = inchesToPixels(formHeightIn.value)
-  /*console.log("setCanvasSizeFromInches called: formHeightIn is "+formHeightIn.value+", and to inches is "+hPx+".")*/
-  canvas.setDimensions({ wPx, hPx }, { cssOnly: false })
+  const wPx = inchesToPixels(formWidthIn)
+  const hPx = inchesToPixels(formHeightIn)
+  canvas.setDimensions({ widthIn, heightIn }, { cssOnly: false })
   canvas.calcOffset()
   // if you draw a grid/rulers, refresh them here:
-  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
-  canvas.setZoom(1)
-  refreshGrid()
+  // instance.proxy?.refreshGrid?.()
   canvas.requestRenderAll()
 }
 
@@ -444,9 +663,11 @@ function getActiveObjects() {
   return (canvas?.getActiveObjects?.() ?? []).filter(Boolean);
 }
 
-// Apply a style patch to ONE object (plain or curved)
+// Apply a style patch to ONE object (plain text / shapes)
 function applyStyleToObject(obj, patch) {
-  // normalize keys a bit
+  console.log('applyStyleToObject called for', obj.type, 'with patch', patch)
+
+  // 1) Normalize basic keys
   const mapped = {
     ...(patch.fill         != null ? { fill: String(patch.fill) } : {}),
     ...(patch.stroke       != null ? { stroke: String(patch.stroke) } : {}),
@@ -455,37 +676,105 @@ function applyStyleToObject(obj, patch) {
     ...(patch.fontWeight   != null ? { fontWeight: String(patch.fontWeight) } : {}),
     ...(patch.fontStyle    != null ? { fontStyle: patch.fontStyle } : {}),
     ...(patch.fontSize     != null ? { fontSize: Number(patch.fontSize) } : {}),
-  };
 
+    // shadow-related keys from ObjectPropertiesPanel (adjust names if needed)
+    ...(patch.shadowColor   != null ? { shadowColor: String(patch.shadowColor) } : {}),
+    ...(patch.shadowBlur    != null ? { shadowBlur: Number(patch.shadowBlur) } : {}),
+    ...(patch.shadowOffsetX != null ? { shadowOffsetX: Number(patch.shadowOffsetX) } : {}),
+    ...(patch.shadowOffsetY != null ? { shadowOffsetY: Number(patch.shadowOffsetY) } : {}),
+    ...(patch.shadowEnabled != null ? { shadowEnabled: !!patch.shadowEnabled } : {}),
+    ...(patch.shadow        != null ? { shadow: patch.shadow } : {}),
+  }
 
-    // Plain Fabric text (Text/i-Text/Textbox)
-    const patchNative = {};
-    if ('fill'        in mapped) patchNative.fill        = mapped.fill;
-    if ('stroke'      in mapped) patchNative.stroke      = mapped.stroke;
-    if ('strokeWidth' in mapped) patchNative.strokeWidth = mapped.strokeWidth;
-    if ('fontFamily'  in mapped) patchNative.fontFamily  = mapped.fontFamily;
-    if ('fontWeight'  in mapped) patchNative.fontWeight  = mapped.fontWeight;
-    if ('fontStyle'   in mapped) patchNative.fontStyle   = mapped.fontStyle;
-    if ('fontSize'    in mapped) patchNative.fontSize    = mapped.fontSize;
+  // 2) Build the native patch for Fabric (fill/stroke/fonts/etc.)
+  const patchNative: any = {}
+  if ('fill'        in mapped) patchNative.fill        = mapped.fill
+  if ('stroke'      in mapped) patchNative.stroke      = mapped.stroke
+  if ('strokeWidth' in mapped) patchNative.strokeWidth = mapped.strokeWidth
+  if ('fontFamily'  in mapped) patchNative.fontFamily  = mapped.fontFamily
+  if ('fontWeight'  in mapped) patchNative.fontWeight  = mapped.fontWeight
+  if ('fontStyle'   in mapped) patchNative.fontStyle   = mapped.fontStyle
+  if ('fontSize'    in mapped) patchNative.fontSize    = mapped.fontSize
 
-    obj.set(patchNative);
-    obj.setCoords?.();
+  // ---- STROKE: simple, since text scaling is normalized already ----
+  if ('stroke' in mapped || 'strokeWidth' in mapped) {
+    patchNative.strokeUniform = true
+  }
 
+  // ---- SHADOW: make blur/offset feel like px, even on scaled shapes ----
+  const hasShadowFields =
+    'shadow'        in mapped ||
+    'shadowColor'   in mapped ||
+    'shadowBlur'    in mapped ||
+    'shadowOffsetX' in mapped ||
+    'shadowOffsetY' in mapped ||
+    'shadowEnabled' in mapped
+
+  if (hasShadowFields) {
+    const existingShadow = obj.shadow || {}
+    const scaleX = obj.scaleX ?? 1
+    const scaleY = obj.scaleY ?? 1
+    const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2 || 1
+
+    // Decide if we are turning shadow OFF explicitly
+    if (mapped.shadowEnabled === false || patch.shadow === null) {
+      obj.set('shadow', null)
+    } else {
+      // treat presence of any shadow field as "enable shadow"
+      const color =
+        mapped.shadowColor ??
+        (mapped.shadow && mapped.shadow.color) ??
+        existingShadow.color ??
+        'rgba(0,0,0,0.5)'
+
+      const logicalBlur =
+        mapped.shadowBlur ??
+        (mapped.shadow && mapped.shadow.blur) ??
+        existingShadow.blur ??
+        0
+
+      const logicalOffsetX =
+        mapped.shadowOffsetX ??
+        (mapped.shadow && mapped.shadow.offsetX) ??
+        existingShadow.offsetX ??
+        0
+
+      const logicalOffsetY =
+        mapped.shadowOffsetY ??
+        (mapped.shadow && mapped.shadow.offsetY) ??
+        existingShadow.offsetY ??
+        0
+
+      // Normalize by scale so UI values feel like px on screen
+      const shadow = new fabric.Shadow({
+        color,
+        blur:    logicalBlur    / (avgScale || 1),
+        offsetX: logicalOffsetX / (avgScale || 1),
+        offsetY: logicalOffsetY / (avgScale || 1),
+        affectStroke: false,
+      })
+
+      obj.set('shadow', shadow)
+    }
+  }
+
+  obj.set(patchNative)
+  obj.setCoords?.()
 }
 
-//when resizing canvas dim, preserve aspect ratio & size of all art,
+
+
+
+//when resizing canvas dim, preserve aspect ratio & size of all art, 
 //including the grid
-function resizeCanvasNoScale(
-  newWidthIn: number,
-  newHeightIn: number,
-  anchor: 'top-left' | 'center' | 'bottom-right' = 'top-left'
-) {
+function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number, 
+  anchor: 'top-left'|'center'|'bottom-right' = 'top-left') {
   const oldW = canvas.getWidth()
   const oldH = canvas.getHeight()
-  const newW = Math.max(1, Math.round(inchesToPixels(newWidthIn)))
-  const newH = Math.max(1, Math.round(inchesToPixels(newHeightIn)))
+  const newW = inchesToPixels(newWidthIn)
+  const newH = inchesToPixels(newHeightIn)
 
-  // Compute translation based on desired anchor
+  // Optional anchoring: shift objects when shrinking/expanding
   let dx = 0, dy = 0
   if (anchor === 'center') {
     dx = (newW - oldW) / 2
@@ -495,71 +784,157 @@ function resizeCanvasNoScale(
     dy = (newH - oldH)
   }
 
-  // Shift existing objects (no scaling)
   if (dx !== 0 || dy !== 0) {
     canvas.getObjects().forEach(o => {
-      o.left = (o.left ?? 0) + dx
-      o.top  = (o.top  ?? 0) + dy
+      o.left += dx
+      o.top  += dy
       o.setCoords()
     })
   }
 
-  // Update backing-store size (NOT cssOnly)
-  canvas.setDimensions({ width: newW, height: newH }, { cssOnly: false })
+  canvas.setWidth(newW)
+  canvas.setHeight(newH)
   canvas.calcOffset()
 
-  // Keep viewport sane (no implicit zoom/transform)
-  canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
-  canvas.setZoom(1)
-
-  // Rebuild grid so cells remain square and tiled
-  // Call directly; no 'instance' usage
-  refreshGrid()
+  // Rebuild grid fresh so cells remain square and fully tiled
+  instance.proxy?.refreshGrid?.()
 
   canvas.requestRenderAll()
 }
 
 
-// Apply a style patch to ALL selected objects
-/*function applyStyleToSelection(patch) {
-  const objs = getActiveObjects();
-  if (!objs.length) return;
-  objs.forEach(o => applyStyleToObject(o, patch));
-  canvas.requestRenderAll();
-}*/
+function updateTextOnPath(group: any, patch: Record<string, any>) {
+  // If you already have text/content layout logic, keep it above this block.
+
+  // 🔑 Apply the style patch to **every** text glyph in the group
+  forEachTextGlyphInPathGroup(group, (glyph) => {
+    applyStyleToObject(glyph, patch)
+  })
+
+  group.setCoords?.()
+  group.canvas?.requestRenderAll()
+}
+
+
+
 function applyStyleToSelection(style: Record<string, any>) {
+  console.log("applyStyleToSelection Called")
   const sel = canvas?.getActiveObject()
   if (!sel) return
 
+  const applyToOne = (o: any) => {
+    // If this is your special text-on-path group, keep using its own updater
+    if (isTextOnPathGroup && isTextOnPathGroup(o)) {
+      updateTextOnPath(o, style)
+    } else {
+      applyStyleToObject(o, style)   // 🔴 now we actually use the helper
+    }
+  }
+
   if (sel.type === 'activeSelection' && sel.forEachObject) {
-    sel.forEachObject((o: any) => {
-      if (isTextOnPathGroup(o)) {
-        updateTextOnPath(o, style)
-      } else {
-        o.set(style)
-        o.setCoords?.()
-      }
-    })
-    canvas.requestRenderAll()
-    return
-  }
-
-  if (isTextOnPathGroup(sel)) {
-    updateTextOnPath(sel, style)
+    sel.forEachObject((o: any) => applyToOne(o))
   } else {
-    sel.set(style)
-    sel.setCoords?.()
-    canvas.requestRenderAll()
+    applyToOne(sel)
   }
+
+  canvas.requestRenderAll()
 }
+
 function handlePropertiesStyleChange(patch: Record<string, any>) {
-  // Apply to canvas selection
-  applyStyleToSelection(patch)
+  const obj = canvas.getActiveObject()
+  if (!obj) return
 
-  // Also update local UI state so the panel stays in sync
-  Object.assign(styleState, patch)
+  const { shadow, gradientFill, ...rest } = patch
+
+  // Helper: apply fill/stroke/strokeWidth to all text children in a group
+  const applyFillStrokeToTextChildren = (node: any) => {
+    if (!node) return
+
+    if (node.type === 'group') {
+      // Recurse into nested groups
+      if (Array.isArray((node as any)._objects)) {
+        (node as any)._objects.forEach(child => applyFillStrokeToTextChildren(child))
+      }
+      return
+    }
+
+    // Only target text-like objects, not paths
+    if (
+      node.type === 'text' ||
+      node.type === 'i-text' ||
+      node.type === 'textbox'
+    ) {
+      if ('fill' in rest) {
+        node.set('fill', rest.fill)
+      }
+      if ('stroke' in rest) {
+        node.set('stroke', rest.stroke)
+      }
+      if ('strokeWidth' in rest) {
+        node.set('strokeWidth', rest.strokeWidth)
+      }
+    }
+  }
+
+  // If this is a group (e.g., Text-on-Path), push fill/stroke into its text children
+  if (obj.type === 'group') {
+    applyFillStrokeToTextChildren(obj)
+
+    // Remove these from "rest" so they are not applied to the group itself
+    if ('fill' in rest) delete rest.fill
+    if ('stroke' in rest) delete rest.stroke
+    if ('strokeWidth' in rest) delete rest.strokeWidth
+  }
+
+  // Apply remaining properties (fontSize, fontWeight, etc.) directly to the main object
+  if (Object.keys(rest).length > 0) {
+    obj.set(rest)
+  }
+
+  // Shadow requires a fabric.Shadow instance, and should be applied on the group
+  if ('shadow' in patch) {
+    if (!shadow) {
+      obj.set('shadow', null)
+    } else {
+      obj.set('shadow', new fabric.Shadow({
+        color: shadow.color ?? '#000000',
+        blur: shadow.blur ?? 0,
+        offsetX: shadow.offsetX ?? 0,
+        offsetY: shadow.offsetY ?? 0
+      }))
+    }
+  }
+
+  // Apply gradient fill if requested
+  if (gradientFill) {
+    // Map direction → coords in percentage space
+    let coords: fabric.Gradient['coords']
+    switch (gradientFill.direction) {
+      case 'vertical':
+        coords = { x1: 0, y1: 0, x2: 0, y2: 1 }
+        break
+      case 'diagonal':
+        coords = { x1: 0, y1: 0, x2: 1, y2: 1 }
+        break
+      case 'horizontal':
+      default:
+        coords = { x1: 0, y1: 0, x2: 1, y2: 0 }
+        break
+    }
+
+    const gradient = new fabric.Gradient({
+      type: 'linear',
+      gradientUnits: 'percentage',
+      coords,
+      colorStops: gradientFill.colorStops
+    })
+
+    obj.set('fill', gradient)
+  }
+
+  canvas.renderAll()
+  syncStyleStateFromObject(obj)
 }
-
 
 function getSelectionTextObjects(): fabric.Object[] {
   if (!canvas) return []
@@ -579,25 +954,57 @@ async function onChangeFontFamily(family: string) {
     console.warn('Font failed to load:', family, e)
     return;
   }
-
+  applyStyleToSelection({ fontFamily: family });  // <-- uses your helper that reflows curved groups
   // 2) Apply to selected text
   const targets = getSelectionTextObjects()
   if (!targets.length) return
 
-  targets.forEach( obj => {
+  targets.forEach(obj => {
     // @ts-ignore Fabric text props
     obj.set({ fontFamily: family })
-    obj.setCoords()
-  })
-
+    obj.setCoords()   
+  })  
+  
   canvas.requestRenderAll()
 }
 
-function updateSelectedObject(e) {
-  const obj = e.selected[0];
-  Object.keys(selectedObject).forEach(key => delete selectedObject[key]);
-  Object.assign(selectedObject, obj);
+function updateSelectedObject() {
+
+  const sel = canvas?.getActiveObject()
+
+  if (!sel) {
+    selectionState.kind = 'none'
+    selectionState.pathMeta = null
+    return
+  }
+
+  if (isTextOnPathGroup(sel)) {
+    selectionState.kind = 'text-on-path'
+
+    // Pull meta off the group (or its custom props)
+    // Use whatever you stored at creation time.
+    const meta = sel.sbPathMeta || {
+      text: sel.text || 'Your curved text',
+      presetKey: sel.pathPresetKey || 'ArcUp',
+      letterSpacing: sel.letterSpacing ?? 2,
+      startOffset: sel.startOffset ?? 0,
+      align: sel.pathAlign || 'center',
+      flip: !!sel.flipBaseline,
+      showPath: !!sel.showPath,
+    }
+
+    selectionState.pathMeta = meta
+  } else {
+    selectionState.kind = /* 'text' | 'circle' | etc */
+    selectionState.pathMeta = null
+  }
+
+
+
 }
+
+ 
+
 function getSelectionTargets(): fabric.Object[] {
   if (!canvas) return []
   const many = canvas.getActiveObjects?.() || []
@@ -612,8 +1019,7 @@ function getSelectionTargets(): fabric.Object[] {
 
 function onChangeStrokeWidth(width) {
   const targets = getSelectionTargets()
-  let obj = getSingleActive()
-   for (obj of targets) {
+  for (const obj of targets) {
     if (width <= 0) {
       obj.set({ stroke: null, strokeWidth: 0 })
     } else {
@@ -631,8 +1037,7 @@ function onChangeStrokeWidth(width) {
 
 function onChangeStrokeColor(color) {
   const targets = getSelectionTargets()
-  let obj = getSingleActive()
-  for (obj of targets) {
+  for (const obj of targets) {
     // ensure visible if previously 0
    const w = Number(obj.strokeWidth ?? 0)
     obj.set({
@@ -648,8 +1053,7 @@ function onChangeStrokeColor(color) {
 
 function onClearStroke() {
   const targets = getSelectionTargets()
-  let obj = getSingleActive()
-  for (obj of targets) {
+  for (const obj of targets) {
     obj.set({ stroke: null, strokeWidth: 0 })
     obj.setCoords()
   }
@@ -658,8 +1062,7 @@ function onClearStroke() {
 
 function onChangeFillColor(color) {
   const targets = getSelectionTargets()
-  let obj = getSingleActive()
-  for (obj of targets) {
+  for (const obj of targets) {
     obj.set({ fill: color })
     obj.setCoords()
   }
@@ -668,7 +1071,7 @@ function onChangeFillColor(color) {
 }
 
 function updateCanvas() {
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function drawGrid(canvas) {
@@ -827,46 +1230,225 @@ function sendObjectToBackSafe(c: fabric.Canvas | null | undefined, obj: any) {
   }
 }
 
+function deformText( selectedTextObject ){
+  var curvedText = new fabric.CurvedText('Your Curved Text', {
+      left: 100,
+      top: 100,
+      radius: 50, // Radius of the curve
+      fill: 'blue',
+      fontSize: 24,
+      fontFamily: 'Arial',
+      textAlign: 'center'
+  });
+
+  canvas.add(curvedText);
+  canvas.requestRenderAll();
+
+}
 
 function addText() {
   const text = new fabric.IText('Sample Text', {
     left: 100,
     top: 100,
-    fill: '#000000',
-    fontSize: 14,
+    fill: '#999999',
+    fontSize: 20,
   });
   canvas.add(text);
   canvas.setActiveObject(text);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function addRectangle() {
   const rect = new fabric.Rect({
-    left: 40,
-    top: 40,
-    fill: '#dddddd',
+    left: 150,
+    top: 150,
+    fill: '#999999',
     width: 100,
     height: 60,
     stroke: '#000000',
-    strokeWidth: 0,
+    strokeWidth: 1,
   });
   canvas.add(rect);
   canvas.setActiveObject(rect);
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 function addCircle() {
   const circle = new fabric.Circle({
-    left: 0,
-    top: 0,
-    radius: 30,
-    fill: '#dddddd',
+    left: 200,
+    top: 200,
+    radius: 40,
+    fill: '#999999',
     stroke: '#000000',
-    strokeWidth: 0,
+    strokeWidth: 1,
   });
   canvas.add(circle);
   canvas.setActiveObject(circle);
-  canvas.renderAll();
+  canvas.requestRenderAll();
+}
+
+function beginLineDrawMode() {
+  if (!canvas) return
+
+  currentTool.value = 'line'
+  isDrawingLine = false
+  activeLine = null
+
+  // Optional: disable current selection while drawing
+  canvas.discardActiveObject()
+  canvas.defaultCursor = 'crosshair'
+  canvas.renderAll()
+}
+
+
+// === [CurvedText] reactive UI state ===
+const curvedUI = reactive({
+  text: 'Your Curved Text',
+  radius: 150,
+  startAngle: 270,
+  spacing: 0,
+  clockwise: true,
+  inward: false,
+  align: 'center', // 'start' | 'center' | 'end'
+});
+
+
+
+function curveSelectedText() {
+  const obj = canvas?.getActiveObject?.();
+  if (!obj) return;
+
+  const isPlainText = ['text', 'i-text', 'textbox'].includes(obj.type);
+  if (!isPlainText) return;
+
+  // Effective font size = fontSize * vertical scale (usually uniform)
+  const scaleY = obj.scaleY != null ? obj.scaleY : 1;
+  const scaleX = obj.scaleX != null ? obj.scaleX : 1;
+  const effFontSize = (obj.fontSize || 48) * (scaleY || 1);
+
+  // Keep style
+  const style = {
+    fontFamily: obj.fontFamily || 'Arial',
+    fontSize: effFontSize,                      // << preserve visual size
+    fontWeight: obj.fontWeight || 'normal',
+    italic: obj.fontStyle === 'italic',
+    fill: obj.fill || '#111',
+    stroke: obj.stroke || null,
+    strokeWidth: obj.strokeWidth || 0,
+  };
+
+  // Center/angle
+  const center = obj.getCenterPoint ? obj.getCenterPoint() : { x: obj.left, y: obj.top };
+  const angle  = obj.angle || 0;
+
+  // Seed text for panel
+  curvedUI.text = obj.text || curvedUI.text;
+
+  // Create curved group at same spot/angle; reset group scale to 1 (baked into fontSize)
+  const group = createCurvedText(curvedUI.text, curvedUI, { left: center.x, top: center.y, ...style });
+  group.set({ angle, scaleX: 1, scaleY: 1 });
+
+  canvas.remove(obj);
+  canvas.add(group);
+  canvas.setActiveObject(group);
+  canvas.requestRenderAll();
+}
+
+
+
+function uncurveSelectedText() {
+  const obj = canvas?.getActiveObject?.();
+  if (!obj?.curved) return;
+
+  const center = obj.getCenterPoint ? obj.getCenterPoint() : { x: obj.left, y: obj.top };
+  const angle  = obj.angle || 0;
+  const s = obj.textStyle || {};
+  const scaleY = obj.scaleY != null ? obj.scaleY : 1;
+
+  // Effective font size = stored fontSize * current group scale
+  const effFontSize = (s.fontSize || 48) * (scaleY || 1);
+
+  const flat = new fabric.Textbox(obj.curved.text || '', {
+    left: center.x,
+    top: center.y,
+    originX: 'center',
+    originY: 'center',
+    angle,
+    scaleX: 1,                      // reset; size baked into fontSize
+    scaleY: 1,
+    fontFamily: s.fontFamily || 'Arial',
+    fontSize: effFontSize,          // << preserve visual size
+    fontWeight: s.fontWeight || 'normal',
+    fontStyle: s.italic ? 'italic' : 'normal',
+    fill: s.fill || '#111',
+    stroke: s.stroke || null,
+    strokeWidth: s.strokeWidth || 0,
+  });
+
+  canvas.remove(obj);
+  canvas.add(flat);
+  canvas.setActiveObject(flat);
+  canvas.requestRenderAll();
+}
+
+
+// === [CurvedText] reflow the active curved text group ===
+function reflowActiveCurved(partial) {
+  if (!canvas) return;
+  const obj = canvas.getActiveObject?.();
+  if (obj && obj.curved) {
+    reflowCurvedText(obj, partial);
+    canvas.requestRenderAll();
+  }
+}
+
+// === [CurvedText] keep the panel in sync when user selects a curved group ===
+function syncCurvedUIFrom(obj) {
+  if (!obj?.curved) return;
+  const { text, radius, startAngle, spacing, clockwise, inward, align } = obj.curved;
+  curvedUI.text = text;
+  curvedUI.radius = radius;
+  curvedUI.startAngle = startAngle;
+  curvedUI.spacing = spacing;
+  curvedUI.clockwise = !!clockwise;
+  curvedUI.inward = !!inward;
+  curvedUI.align = align || 'center';
+}
+
+// === [CurvedText] watch the UI and live-update the selected curved group ===
+watch(curvedUI, (v) => {
+  if (!canvas) return;
+  const obj = canvas.getActiveObject?.();
+  if (obj && obj.curved) {
+    reflowCurvedText(obj, v);
+    canvas.requestRenderAll();
+  }
+}, { deep: true });
+
+// === [CurvedText] unify stroke behavior for *any* selection (incl. curved) ===
+function applyStrokeToActive(strokeColor, strokeWidth) {
+  if (!canvas) return;
+  const obj = canvas.getActiveObject?.();
+  if (!obj) return;
+
+  if (obj.curved) {
+    // Our custom group
+    applyStrokeToCurved(obj, strokeColor, Number(strokeWidth));
+  } else {
+    // Native Fabric objects
+    const color = Number(strokeWidth) > 0 ? strokeColor : null;
+    obj.set({
+      stroke: color,
+      strokeWidth: Number(strokeWidth) || 0,
+    });
+  }
+  canvas.requestRenderAll();
+}
+
+// === [CurvedText] hook selection events so the panel reflects the current object ===
+function handleSelection(e) {
+  const obj = e?.selected?.[0] ?? e?.target ?? canvas?.getActiveObject?.();
+  if (obj?.curved) syncCurvedUIFrom(obj);
 }
 
 onBeforeUnmount(() => {
@@ -884,7 +1466,7 @@ onBeforeUnmount(() => {
 function normalizeTextStyleUpdate(u) {
  /** @type {Record<string, any>} */
   const out = {};
-
+  
   if (!u || typeof u !== 'object') return out;
 
   // colors
@@ -922,6 +1504,25 @@ function applyTextStyleToActive(update) {
 
   const mapped = normalizeTextStyleUpdate(update);
 
+  if (obj.curved) {
+    // Update the group’s style “bag” (our own), then reflow
+    obj.textStyle = obj.textStyle || {};
+
+    if ('fill'       in mapped) obj.textStyle.fill       = mapped.fill;
+    if ('stroke'     in mapped) obj.textStyle.stroke     = mapped.stroke;
+    if ('strokeWidth'in mapped) obj.textStyle.strokeWidth= mapped.strokeWidth;
+
+    if ('fontFamily' in mapped) obj.textStyle.fontFamily = mapped.fontFamily;
+    if ('fontWeight' in mapped) obj.textStyle.fontWeight = mapped.fontWeight;
+    if ('fontStyle'  in mapped) obj.textStyle.italic     = (mapped.fontStyle === 'italic');
+    if ('fontSize'   in mapped) obj.textStyle.fontSize   = mapped.fontSize;
+
+    // Reflow in-place so glyphs are rebuilt with new styles
+    reflowCurvedText(obj, { textStyle: obj.textStyle });
+    canvas.requestRenderAll();
+    return;
+  }
+
   // Plain Fabric text objects
   const patch = {};
   if ('fill'        in mapped) patch.fill       = mapped.fill;
@@ -952,7 +1553,7 @@ function handleFileUpload(e) {
       img.set({ left: 100, top: 100, scaleX: 0.5, scaleY: 0.5 });
       canvas.add(img);
       canvas.setActiveObject(img);
-      canvas.renderAll();
+      canvas.requestRenderAll();
     });
   };
   reader.readAsDataURL(file);
@@ -976,59 +1577,59 @@ function bringToFront() {
 
 
 function deleteSelected() {
-   const selected = getAllActive()
-  if (!selected.length) return
-
-  selected.forEach(o => canvas.remove(o))
-  canvas.discardActiveObject()     // no argument
-  canvas.requestRenderAll()
+   const obj = assignActiveObj();
+  if (obj) {
+    canvas.remove(obj);
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+  }
 }
 
 function alignLeft() {
-  const obj = getSingleActive();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: 0 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignCenter() {
- const obj = getSingleActive();
+ const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: canvas.getWidth() / 2 - obj.getScaledWidth() / 2 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignRight() {
-  const obj = getSingleActive();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ left: canvas.getWidth() - obj.getScaledWidth() });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignTop() {
-  const obj = getSingleActive();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: 0 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignMiddle() {
-  const obj = getAllActive();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: canvas.getHeight() / 2 - obj.getScaledHeight() / 2 });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
 function alignBottom() {
-  const obj = getSingleActive();
+  const obj = assignActiveObj();
   if (obj) {
     obj.set({ top: canvas.getHeight() - obj.getScaledHeight() });
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
@@ -1036,7 +1637,7 @@ function groupObjects() {
   const active = canvas.getActiveObject();
   if (active && active.type === 'activeSelection') {
     active.toGroup();
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
 }
 
@@ -1044,42 +1645,8 @@ function ungroupObjects() {
   const active = canvas.getActiveObject();
   if (active && active.type === 'group') {
     active.toActiveSelection();
-    canvas.renderAll();
+    canvas.requestRenderAll();
   }
-}
-
-function addTextOnPath({
-  text = 'Your curved text',
-  pathD = PATH_PRESETS.ArcUp,
-  fontFamily = 'Arial',
-  fontSize = 48,
-  letterSpacing = 2,
-  startOffset = 0,
-  align = 'center',
-  flip = false
-} = {}) {
-  const group = createTextOnPath({ text, pathD, fontFamily, fontSize, letterSpacing, startOffset, align, flip });
-  group.set({ left: 50, top: 50 });
-  canvas.add(group);
-  canvas.setActiveObject(group);
-  canvas.requestRenderAll();
-}
-
-// If the selected object is a text-on-path group, update it
-function tweakSelectedTextOnPath(patch) {
-  const active = canvas.getActiveObject();
-  if (active?.data?.kind === 'text-on-path') {
-    updateTextOnPath(active, patch);
-  }
-}
-
-// After JSON load:
-function loadCanvasFromJson(json) {
-  canvas.loadFromJSON(json, () => {
-    // Optional pass to harden sub-object flags
-    canvas.getObjects().forEach(obj => rehydrateTextOnPath(obj));
-    canvas.renderAll();
-  });
 }
 
 //sign-type template components
@@ -1128,18 +1695,74 @@ function addBasePostForSign(signType) {
     }
   }
 
-
+ 
 }
 
+function assignActiveObj(){
+  return canvas.getActiveObject();
+}
+// after creating gridGroup and canvas.add(gridGroup)
+moveToBackSafe(gridGroup, 0)
 
 
-function getSingleActive(): fabric.Object | null {
-  const selected = canvas.getActiveObjects()
-  return selected.length === 1 ? selected[0] : null
+
+function applyUserDimensions(widthIn, heightIn, ppi) {
+  const wPx = Math.max(1, Math.round(widthIn * ppi));
+  const hPx = Math.max(1, Math.round(heightIn * ppi));
+
+  canvas.setDimensions({ width: wPx, height: hPx }, { cssOnly: false });
+  canvas.calcOffset();
+  canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  canvas.setZoom(1);
+  canvas.requestRenderAll();
 }
 
-function getAllActive(): fabric.Object[] {
-  return canvas.getActiveObjects() // [] when none
+const PATH_PRESETS = {
+  ArcUp: 'M 0 150 Q 150 0 300 150',
+  ArcDown: 'M 0 0 Q 150 150 300 0',
+  Wave: 'M 0 100 C 50 0, 100 200, 150 100 S 250 0, 300 100'
+};
+
+function addTextOnPath({
+  text = 'Your curved text',
+  pathD = PATH_PRESETS.ArcUp,
+  fontFamily = 'Arial',
+  fontSize = 48,
+  letterSpacing = 2,
+  startOffset = 0,
+  align = 'center',
+  flip = false
+} = {}) {
+  const group = createTextOnPath({ text, pathD, fontFamily, fontSize, letterSpacing, startOffset, align, flip });
+  group.set({ left: 50, top: 50 });
+  canvas.add(group);
+  canvas.setActiveObject(group);
+  canvas.requestRenderAll();
+  updateSelectedObject() // make sure panel sees the new object
+}
+
+// If the selected object is a text-on-path group, update it
+function tweakSelectedTextOnPath(opts: any) {
+  const sel = canvas?.getActiveObject()
+  if (!sel || !isTextOnPathGroup(sel)) return
+
+  console.log('tweakSelectedTextOnPath payload:', opts)
+
+  // Update the group meta
+  sel.sbPathMeta = {
+    ...(sel.sbPathMeta || {}),
+    ...opts,
+  }
+  canvas.requestRenderAll()
+}
+
+// After JSON load:
+function loadCanvasFromJson(json) {
+  canvas.loadFromJSON(json, () => {
+    // Optional pass to harden sub-object flags
+    canvas.getObjects().forEach(obj => rehydrateTextOnPath(obj));
+    canvas.renderAll();
+  });
 }
 
 function isTextOnPathGroup(obj: any) {
@@ -1147,22 +1770,28 @@ function isTextOnPathGroup(obj: any) {
     || (Array.isArray(obj?._objects) && obj._objects[0]?.type === 'path')
 }
 
-function getSelectionKind(obj: any): typeof selectionKind.value {
-  if (!obj) return 'none'
-  if (isTextOnPathGroup(obj)) return 'text-on-path'
-  if (obj.type === 'i-text' || obj.type === 'text') return 'text'
-  if (obj.type === 'rect') return 'rect'
-  if (obj.type === 'circle') return 'circle'
-  return 'generic'
+function handlePathTextChange(payload) {
+  const obj = canvas?.getActiveObject()
+  if (!obj || !isTextOnPathGroup(obj)) return
+  updateTextOnPath(obj, payload)  // 👈 payload has fill / stroke / strokeWidth now
 }
+
+function handlePathTextApply(payload) {
+  const obj = canvas?.getActiveObject()
+  if (!obj || !isTextOnPathGroup(obj)) return
+  updateTextOnPath(obj, payload)
+}
+
 function hydrateStyleFromObject(obj: any | null) {
+  
   if (!obj) {
     selectionKind.value = 'none'
+    console.log("hydrateStyleFromObject finds !obj false, sets selectionKind to none")
     return
   }
 
   selectionKind.value = getSelectionKind(obj)
-
+  console.log("getSelectionKind(obj), returns : "+selectionKind.value) //e.g. returns: rect
   if (isTextOnPathGroup(obj) && obj.data?.options) {
     const o = obj.data.options
     styleState.fill = o.fill ?? styleState.fill
@@ -1183,9 +1812,101 @@ function hydrateStyleFromObject(obj: any | null) {
   }
 }
 
+function getSelectionKind(obj: any) {
+   
+  if (!obj) return 'none'
+    console.log("obj.isType?.kind is "+obj.isType?.kind)
+  if (obj.data?.kind === 'text-on-path' ||
+      (Array.isArray(obj._objects) && obj._objects[0]?.type === 'path')) {
+    return 'text-on-path'
+  }
 
-// after creating gridGroup and canvas.add(gridGroup)
-moveToBackSafe(gridGroup, 0)
+  if (obj.isType?.('i-text') || obj.isType?.('text')) {
+    return 'text'
+  }
+
+  if (obj.isType?.('rect')) return 'rect'
+  if (obj.isType?.('circle')) return 'circle'
+  if (obj.isType?.('line')) return 'line'
+
+  return 'generic'
+}
+
+function onSelectionChange() {
+  const obj = canvas.getActiveObject()
+  if (!obj) return
+  syncStyleStateFromObject(obj)
+}
+
+function onSelectionClear() {
+  styleState.value = {
+    fill: null,
+    stroke: null,
+    strokeWidth: 0,
+    fontFamily: null,
+    fontSize: null,
+    fontWeight: null,
+    fontStyle: null,
+    shadow: null
+  }
+}
+
+function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!canvas) return
+
+  const pointer = canvas.getPointer(opt.e)
+
+  lineStart = { x: pointer.x, y: pointer.y }
+
+  activeLine = new fabric.Line(
+    [pointer.x, pointer.y, pointer.x, pointer.y],
+    {
+      stroke: '#000000',
+      strokeWidth: 2,
+      selectable: true,
+      evented: true,
+      // optional:
+      // strokeUniform: true
+    }
+  )
+
+  canvas.add(activeLine)
+  isDrawingLine = true
+}
+
+function handleCanvasMouseMove(opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!isDrawingLine) return
+  if (!canvas || !activeLine) return
+
+  const pointer = canvas.getPointer(opt.e)
+
+  activeLine.set({
+    x2: pointer.x,
+    y2: pointer.y
+  })
+
+  canvas.renderAll()
+}
+
+function handleCanvasMouseUp(_opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!canvas) return
+
+  if (isDrawingLine && activeLine) {
+    activeLine.setCoords()
+  }
+
+  isDrawingLine = false
+  activeLine = null
+
+  // Exit line mode after drawing one line.
+  currentTool.value = 'none'
+  canvas.defaultCursor = 'default'
+  canvas.renderAll()
+}
+
 
 </script>
 

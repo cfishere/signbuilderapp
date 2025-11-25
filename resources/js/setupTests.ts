@@ -1,13 +1,8 @@
 import { config } from '@vue/test-utils';
 import { vi } from 'vitest';
-import './tests/setup/mock-fabric'
-import './tests/setup/svg-canvas-mocks'
-/*import './tests/setup/textOnPath.mocks.ts';   // <-- no named import; just run it
-import './tests/setup/svgAndCanvas.mocks.ts'; // (if you split out the SVG getPointAtLength mocks)*/
 import { createRouter, createWebHistory } from 'vue-router';
-
-
-
+import './tests/setup/mock-fabric'      // the ONLY vi.mock('fabric') lives here
+import './tests/setup/svg-canvas-mocks' // DOM/canvas/SVG helpers
 /*import axios from 'axios';
 
 vi.mock('axios', () => ({
@@ -32,113 +27,45 @@ global.window.__INITIAL_PAGE__ = {
 };
 
 let canvasSpy;
-// tests/setup/textOnPath.mocks.ts (or wherever your fabric mock lives)
-import { vi } from 'vitest';
 
+vi.mock('fabric', async (importOriginal) => {
+  const actual = await importOriginal();
 
-// ✅ Mock CSS Font Loading API
-if (!('fonts' in document)) {
-  Object.defineProperty(document, 'fonts', {
-    configurable: true,
-    value: {
-      // Pretend any font is available
-      check: vi.fn(() => true),
-      // Some libs await document.fonts.ready
-      ready: Promise.resolve(),
-      // No-op event handlers
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    },
-  })
-}
-
-/*
-vi.mock('fabric', async () => {
-  const actual = await vi.importActual<any>('fabric');
-
-  // ----- your existing pieces (keep these) -----
-  const canvasSpy = vi.fn(() => ({
+  const mockCanvasInstance = {
     on: vi.fn(),
-    off: vi.fn(),
     add: vi.fn(),
-    remove: vi.fn(),
+    renderAll: vi.fn(),
     setActiveObject: vi.fn(),
-    getActiveObject: vi.fn(),
-    getObjects: vi.fn(() => []),
-    requestRenderAll: vi.fn(),
-    loadFromJSON: vi.fn((json: any, cb?: Function) => cb && cb()),
-  }));
+    getActiveObject: vi.fn().mockReturnValue({}),
+    discardActiveObject: vi.fn(),
+    getWidth: () => 800,
+    getHeight: () => 800,
+  };
 
   const rectMock = {
-    set: vi.fn().mockReturnThis(),
-    toObject: vi.fn(() => ({ type: 'rect' })),
-    type: 'rect'
+    on: vi.fn(),
+    sendToBack: vi.fn(),
+    set: vi.fn(),
+    toObject: vi.fn(() => ({})),
   };
 
-  // ----- minimal classes used by textOnPath -----
-  class FabricBase {
-    left = 0; top = 0; angle = 0; scaleX = 1; scaleY = 1; flipX = false; flipY = false;
-    selectable = true; evented = true; objectCaching = false; type = 'base';
-    constructor(opts: Record<string, any> = {}) { Object.assign(this, opts); }
-    set(props: Record<string, any>) { Object.assign(this, props); return this; }
-    toObject(extra: string[] = []) {
-      const base: any = { type: this.type };
-      extra?.forEach(k => (base[k] = (this as any)[k]));
-      return base;
-    }
-  }
-  class FabricText extends FabricBase {
-    type = 'text';
-    originX = 'left'; originY = 'top';
-    constructor(text: string, opts: any) { super(opts); (this as any).text = text; }
-  }
-  class FabricPath extends FabricBase {
-    type = 'path';
-    constructor(d: string, opts: any) { super(opts); (this as any).path = d; }
-  }
-  class FabricGroup extends FabricBase {
-    type = 'group'; _objects: any[]; canvas: any = null;
-    constructor(children: any[] = [], opts: any = {}) { super(opts); this._objects = children; }
-    toObject(extra: string[] = []) {
-      const base: any = super.toObject(extra);
-      base.objects = this._objects.map((o: any) => o?.toObject?.() ?? { type: o?.type ?? 'unknown' });
-      return base;
-    }
-  }
+  canvasSpy = vi.fn(() => mockCanvasInstance);
 
-  // Build the namespace with your existing overrides + new classes
-  const overrides = {
-    Canvas: canvasSpy,
-    Rect: vi.fn(() => rectMock),
-    IText: vi.fn(() => ({})),
-    Circle: vi.fn(() => ({})),
-    Line: vi.fn(() => ({})),
-    Image: { fromURL: vi.fn((_: any, cb: any) => cb({ set: vi.fn() })) },
-
-    // NEW for textOnPath
-    Path: FabricPath,
-    Text: FabricText,
-    Group: FabricGroup,
-  };
-
-  const fabricNS = { ...(actual.fabric ?? {}), ...overrides };
-
-  // Return namespace + named + default for maximum compatibility
   return {
     ...actual,
-    fabric: fabricNS,
-    Path: FabricPath,
-    Text: FabricText,
-    Group: FabricGroup,
-    default: { ...(actual.default ?? {}), fabric: fabricNS, Path: FabricPath, Text: FabricText, Group: FabricGroup },
+    fabric: {
+      ...actual.fabric,
+      Canvas: canvasSpy,
+      Rect: vi.fn(() => rectMock),
+      IText: vi.fn(() => ({})),
+      Circle: vi.fn(() => ({})),
+      Line: vi.fn(() => ({})),
+      Image: {
+        fromURL: vi.fn((_, cb) => cb({ set: vi.fn() })),
+      }
+    }
   };
-});*/
-
-
-
-
-
-
+});
 
 //  Mock axios globally
 /*vi.mock('axios', () => {
@@ -162,7 +89,6 @@ globalThis.__canvasSpy = () => canvasSpy;
 /*//  Setup global router
 import DesignerSetup from '@/Components/DesignerSetup.vue';
 import CanvasEditor from '@/Components/CanvasEditor.vue';
-import { textOnPathMocks } from "@tests/setup/textOnPath.mocks";
 
 const router = createRouter({
   history: createWebHistory(),

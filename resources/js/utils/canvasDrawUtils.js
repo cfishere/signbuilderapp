@@ -16,7 +16,7 @@ export function drawPost(canvas, post) {
   canvas.add(rect);
   canvas.setActiveObject(rect);
   /*rect.sendToBack();*/
-  canvas.renderAll();
+  canvas.requestRenderAll();
 }
 
 //template = named signTemplates property.
@@ -51,7 +51,7 @@ export function drawCabinet(canvas, template, dimensions) {
   });
 
   canvas.add(rect);  
-    canvas.renderAll();
+    canvas.requestRenderAll();
 }
 
 

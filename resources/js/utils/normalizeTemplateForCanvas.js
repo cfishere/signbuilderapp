@@ -1,5 +1,5 @@
 // resources/js/utils/templateUtils.ts (or .js)
-export function normalizeTemplateForCanvas(input) {
+export function normalizeTemplateForCanvas(input: any) {
   const t = input ?? {}
 
   // Base dimensions may be on root or face; default to 0 if missing
@@ -54,9 +54,9 @@ export function normalizeTemplateForCanvas(input) {
   }
 }
 
-function pickNumber(v, fallback) {
+function pickNumber(v: any, fallback: number) {
   return isFiniteNumber(v) ? Number(v) : fallback
 }
-function isFiniteNumber(n) {
+function isFiniteNumber(n: any) {
   return typeof n === 'number' && Number.isFinite(n)
 }
