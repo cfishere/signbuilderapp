@@ -59,5 +59,31 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-ECHO is on.
-ECHO is on.
+## Sign Builder App Desc
+
+# 🪧 Sign Builder App
+
+**Sign Builder App** is a web-based design and ordering platform for custom commercial signage.  
+Built with **Laravel 10**, **Vue 3**, **Inertia.js**, and **Fabric.js**, it allows users to create, preview, and purchase signs online.
+
+---
+
+## 🚀 Tech Stack
+- **Backend:** Laravel 10 (PHP 8.2)
+- **Frontend:** Vue 3 + Inertia.js + Vite
+- **Canvas Engine:** Fabric.js (real-time sign rendering)
+- **Database:** MariaDB
+- **Auth:** Laravel Breeze
+- **Payments:** Stripe (planned)
+- **Styling:** Tailwind CSS
+
+---
+
+## ⚙️ Local Setup
+```bash
+git clone https://github.com/cfishere/signbuilderapp.git
+cd signbuilderapp
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
