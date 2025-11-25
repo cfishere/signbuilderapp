@@ -5,11 +5,6 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [vue()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './resources/js'),
-    },
-  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -18,4 +13,10 @@ export default defineConfig({
     setupFiles: ['resources/js/setupTests.js'],
     hookTimeout: 20000, // 20 seconds
   },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'resources/js'),
+      '@tests': path.resolve(__dirname, 'resources/js/tests'), // optional
+    },
+  },  
 });

@@ -57,7 +57,7 @@ export function createTextOnPath(opts) {
     fontSize = 40,
     fontWeight = 'normal',
     fontStyle = 'normal',
-    fill = '#111',
+    fill = '#999999',
     opacity = 1,
     letterSpacing = 0,
     startOffset = 0,
