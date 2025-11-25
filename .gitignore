@@ -24,3 +24,8 @@ Homestead.yaml
 npm-debug.log
 Thumbs.db
 yarn-error.log
+vitest.config.js
+vite.config.js
+test.txt
+tailwind.config.js
+signbuilder-font-list.txt
