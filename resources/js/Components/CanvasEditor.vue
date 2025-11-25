@@ -413,6 +413,46 @@ function bindCanvasSelectionEvents(fCanvas) {
 
 
 
+function bindCanvasSelectionEvents(fCanvas) {
+  console.log("bindCanvasSelectionEvents called")
+  const syncActive = () => {
+    const obj = fCanvas.getActiveObject();
+    activeObj.value = obj || null;
+    if (obj && obj.customType === 'curvedText' && obj.curvedTextMeta) {
+      const m = obj.curvedTextMeta;
+      curved.value = {
+        text: m.text,
+        radius: m.radius,
+        letterSpacing: m.letterSpacing,
+        inward: m.inward,
+        clockwise: m.clockwise,
+        startAngle: m.startAngle ?? null,
+        fill: m.style.fill,
+        fontFamily: m.style.fontFamily,
+        fontSize: m.style.fontSize,
+        fontWeight: m.style.fontWeight,
+        fontStyle: m.style.fontStyle,
+        underline: m.style.underline,
+        stroke: m.style.stroke,
+        strokeWidth: m.style.strokeWidth,
+      };
+    }
+  };
+  fCanvas.on('selection:created', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:updated', (e) => {
+    hydrateStyleFromObject(e.selected?.[0] ?? null);
+    syncActive;
+    
+  });
+  fCanvas.on('selection:cleared', () => { 
+    activeObj.value = null; 
+    hydrateStyleFromObject(null);
+  });
+}
 
 function fitZoomToFace() {
   // STEP 1: We won’t implement full zoom logic yet.
