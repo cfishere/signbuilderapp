@@ -1,7 +1,8 @@
 <?php
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
 use App\Models\UserCanvas;
 use App\Models\User;
 use Inertia\Inertia;

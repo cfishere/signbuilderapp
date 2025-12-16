@@ -131,6 +131,20 @@
         @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
         @path-text-apply="(opts) => tweakSelectedTextOnPath(opts)"
         />
+        <!-- Example toolbar snippet in CanvasEditor.vue -->
+        <div class="flex items-center gap-2 mb-3">
+          <!-- ...your existing buttons (add text, shapes, etc.)... -->
+
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+            :disabled="isSaving || !canSave"
+            @click="saveDesign"
+          >
+            <span v-if="!isSaving">Save Design</span>
+            <span v-else>Saving…</span>
+          </button>
+        </div>
 
           <!-- Auth / Designs panel always visible -->
           <section class="border rounded-xl p-4 shadow-sm">
@@ -152,34 +166,62 @@
 <section class="col-span-12 lg:col-span-9 border rounded-xl shadow-sm p-3 relative">
 
   <!-- TOOLBAR: directly beneath canvas, horizontal -->
-  <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2
-              sticky md:static bottom-3 z-10">
+  <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2 sticky md:static bottom-3 z-10">
     <DesignerToolsPanel  
-  :snapToGrid="snapToGrid"
-  :hasSelection="hasSelection"  
-  :gridVisible="gridVisible"
-  @toggle-snap="(val) => snapToGrid = val"
-  @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
-  @add-text="addText"
-  @add-curved-text="addTextOnPath"     
-  @add-rectangle="addRectangle"
-  @add-circle="addCircle"
-  @start-line-tool="beginLineDrawMode"
-  @upload-image="uploadImage"
-  @bring-to-front="bringToFront"
-  @send-to-back="sendToBack"
-  @delete-selected="deleteSelected"
-  @align-left="alignLeft"
-  @align-center="alignCenter"
-  @align-right="alignRight"
-  @align-top="alignTop"
-  @align-middle="alignMiddle"
-  @align-bottom="alignBottom"
-  @group="groupObjects"
-  @ungroup="ungroupObjects"  
-  @file-upload="handleFileUpload"    
-  :fonts="availableFonts"  
-/>
+      :snapToGrid="snapToGrid"
+      :hasSelection="hasSelection"  
+      :gridVisible="gridVisible"
+      :can-undo="canUndo"
+      :can-redo="canRedo"
+      @undo="undoCanvas"
+      @toggle-snap="(val) => snapToGrid = val"
+      @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
+      @add-text="addText"
+      @add-curved-text="addTextOnPath"     
+      @add-rectangle="addRectangle"
+      @add-circle="addCircle"
+      @start-line-tool="beginLineDrawMode"
+      @upload-image="uploadImage"
+      @bring-to-front="bringToFront"
+      @send-to-back="sendToBack"
+      @delete-selected="deleteSelected"
+      @align-left="alignLeft"
+      @align-center="alignCenter"
+      @align-right="alignRight"
+      @align-top="alignTop"
+      @align-middle="alignMiddle"
+      @align-bottom="alignBottom"
+      @group="groupObjects"
+      @ungroup="ungroupObjects"  
+      @file-upload="handleFileUpload"    
+      :fonts="availableFonts"  
+    />
+<div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+  <div class="flex flex-col">
+    <label class="text-xs font-semibold text-gray-600">
+      Design Title
+    </label>
+    <input
+      v-model="designName"
+      type="text"
+      class="mt-1 w-full max-w-sm rounded-md border border-gray-300 px-2 py-1.5 text-sm shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
+      placeholder="My Sign Design"
+    />
+  </div>
+
+  <div class="mt-2 flex items-center gap-2 sm:mt-0">
+    <button
+      type="button"
+      class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+      :disabled="isSaving || isLoadingDesign || !canSave"
+      @click="saveDesign"
+    >
+      <span v-if="!isSaving">{{ currentDesignId ? 'Update Design' : 'Save Design' }}</span>
+      <span v-else>Saving…</span>
+    </button>
+  </div>
+</div>
+
 
   </div>
 
@@ -193,15 +235,8 @@
 </section>
 </div>
     </main>
-
-  
-
-
-
-
   </div>
 </template>
-
 
 <script setup lang="ts">
 import { usePage, Link } from '@inertiajs/vue3';
@@ -209,7 +244,6 @@ import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted, reactive, g
 import { useDesignerRouteGuard } from '@/composables/useDesignerRouteGuard';
 import { ensureFontLoaded, preloadFonts } from '@/utils/fontLoader'
 import axios from 'axios';
-/*import UserDesignPanel from '@/Components/UserDesignPanel.vue';*/
 import DesignerToolsPanel from '@/Components/DesignerToolsPanel.vue';
 import ObjectPropertiesPanel from '@/Components/ObjectPropertiesPanel.vue'
 import { drawPost, drawCabinet, drawFace, drawLighting } from '@/utils/canvasDrawUtils';
@@ -220,7 +254,6 @@ import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
 import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
 import { applyFontFamily } from '@/utils/applyFontFamily'
 
-
 async function onFontFamilyChange(family: string) {
   const entry = FONT_CATALOG.find(f => f.family === family) ?? { family, weights: [400] }
   await ensureFontLoaded(entry)              // <-- add this line back
@@ -228,7 +261,7 @@ async function onFontFamilyChange(family: string) {
   canvas.requestRenderAll()
 }
 
-let canvas;
+
 
 document.fonts.check('1em "Story Script"')
 
@@ -260,14 +293,52 @@ const props = defineProps({
   ppi: { type: Number, default: 10 },      // 10 px per inch display scale
   canvas: Object,
   activeObject: Object,
-  hasSelection: Boolean
-}) //end mod
+  hasSelection: Boolean,
+  designId: {
+    type: Number,
+    default: null, // passed via Inertia from ?design_id=123
+  },
+  signType: {
+    type: String,
+    default: null, // e.g. "wall_sign_cabinet"
+  },
+  signCategory: {
+    type: String,
+    default: null, // e.g. "Wall Sign"
+  },
+  signWidth: {
+    type: Number,
+    default: null, // inches
+  },
+  signHeight: {
+    type: Number,
+    default: null, // inches
+  },
+  signDepth: {
+    type: Number,
+    default: null, // inches
+  },
+}) 
 
 // local state
 const editingDims = ref(false)
 const formWidthIn = ref(props.initialWidthIn)
 const formHeightIn = ref(props.initialHeightIn)
 const dimError = ref('')
+const gridEnabled = ref(true);       // or from your existing state
+const gridSize = ref(24);            // 24px squares
+const backgroundColor = ref('#ffffff');
+
+const history = ref<any[]>([]);
+const historyIndex = ref(-1);
+let isRestoringHistory = false;
+
+const canUndo = computed(() => historyIndex.value > 0);
+const canRedo = computed(
+  () =>
+    historyIndex.value >= 0 &&
+    historyIndex.value < history.value.length - 1
+);
 
 // --- Line tool state ---
 const currentTool = ref<'none' | 'line'>('none')
@@ -276,7 +347,6 @@ let activeLine: fabric.Line | null = null
 let lineStart = { x: 0, y: 0 }
 
 /*const template = signTemplates[props.signType];*/
-const canvasEl = ref(null)
 const fileInput = ref(null)
 
 const snapToGrid = ref(false)
@@ -286,11 +356,22 @@ let totalHeight = 0
 const activeObj = ref(null);
 
 /** canvas + layout */
-/*let canvas*/
 const viewport = reactive({ w: 1200, h: 620 }) // updated on mount/resize
 const pad = 40 // screen-pixel padding around the face when fitting
 const hasSelection = ref(false)
-const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')
+
+/*type SelectionKind =
+  | 'none'
+  | 'text'
+  | 'text-on-path'
+  | 'rect'
+  | 'circle'
+  | 'line'
+  | 'image'
+  | 'generic'
+  | 'unknown';*/
+const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')  
+const isLoadingDesign = ref(false)
 
 const SHADOW_KEYS = ['shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY']
 const styleState = reactive({
@@ -303,6 +384,39 @@ const styleState = reactive({
   fontStyle: 'normal' as string | null,
 })
 
+interface Design {
+  id: number;
+  user_id: number;
+  name: string | null;
+  slug: string | null;
+
+  sign_type: string | null;        // "wall_sign_cabinet", etc.
+  sign_category: string | null;
+
+  // Physical sign dimensions (inches)
+  sign_width: number | null;       // e.g., 120
+  sign_height: number | null;      // e.g., 48
+  sign_depth: number | null;       // cabinet depth, etc.
+
+  // Canvas dimensions (pixels)
+  canvas_width: number;            // e.g., 480
+  canvas_height: number;           // e.g., 240
+
+  grid_size: number;               // e.g., 24
+  grid_enabled: boolean;           // stored as tinyint(1) in DB
+  snap_to_grid: boolean;
+
+  background_color: string | null; // "#ffffff"
+
+  canvas_state: any;               // fabric.toJSON() object
+  settings: any;                   // misc JSON; can be {}
+
+  status: "draft" | "final" | string;
+  order_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 let _bound = false;
 
 let isPointerDown = false;
@@ -312,6 +426,167 @@ let pendingCurvedReflow = null;
 const thumbnailSrc = computed(() =>
   signTemplates[signType.value]?.thumbnail ?? 'img/sign-type/placeholder.png'
 )
+
+// Name for the design
+const designName = ref('My Sign Design');
+const currentDesignId = ref(null);
+// Saving state
+const isSaving = ref(false);
+// Simple computed to prevent saving with no canvas or name
+const canSave = computed(() => {
+  return !!fabricCanvas.value && !!designName.value.trim();
+  // or just: return !!fabricCanvas.value;
+});
+
+// 🔹 Helper: super simple toast – replace with your own UI
+function showToast(message, type = 'success') {
+  // Integrate with your own notification system here
+  // For now, keep it dead simple:
+  if (type === 'error') {
+    console.error(message);
+  }
+  window.alert(message);
+}
+
+// Track canvas snapshot history, for undo, redo actions:
+function pushHistorySnapshot(label?: string) {
+  const c = fabricCanvas.value || canvas;
+  if (!c || isRestoringHistory) return;
+
+  const json = c.toJSON();
+
+  if (historyIndex.value < history.value.length - 1) {
+    history.value = history.value.slice(0, historyIndex.value + 1);
+  }
+
+  history.value.push(json);
+  historyIndex.value = history.value.length - 1;
+
+  console.log('[history] push', {
+    label,
+    index: historyIndex.value,
+    length: history.value.length,
+  });
+}
+
+function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!canvas) return
+
+  const pointer = canvas.getPointer(opt.e)
+
+  lineStart = { x: pointer.x, y: pointer.y }
+
+  activeLine = new fabric.Line(
+    [pointer.x, pointer.y, pointer.x, pointer.y],
+    {
+      stroke: '#000000',
+      strokeWidth: 2,
+      selectable: true,
+      evented: true,
+      // optional:
+      // strokeUniform: true
+    }
+  )
+
+  canvas.add(activeLine)
+  isDrawingLine = true
+}
+
+function handleCanvasMouseMove(opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!isDrawingLine) return
+  if (!canvas || !activeLine) return
+
+  const pointer = canvas.getPointer(opt.e)
+
+  activeLine.set({
+    x2: pointer.x,
+    y2: pointer.y
+  })
+
+  canvas.renderAll()
+}
+
+function handleCanvasMouseUp(_opt: fabric.IEvent<MouseEvent>) {
+  if (currentTool.value !== 'line') return
+  if (!canvas) return
+
+  if (isDrawingLine && activeLine) {
+    activeLine.setCoords()
+  }
+
+  isDrawingLine = false
+  activeLine = null
+
+  // Exit line mode after drawing one line.
+  currentTool.value = 'none'
+  canvas.defaultCursor = 'default'
+  canvas.renderAll()
+}
+
+
+function normalizeObjectForEditing(obj: fabric.Object) {
+  const anyObj = obj as any;
+  anyObj.isGrid ??= false;
+  if (anyObj.isGrid) return;
+
+  obj.set({
+    selectable: true,
+    evented: true,
+    hasControls: true,
+    lockScalingX: false,
+    lockScalingY: false,
+    lockRotation: false,
+    lockMovementX: false,
+    lockMovementY: false,
+  });
+
+  // ensure they use the default control set
+  anyObj.controls = (fabric.Object.prototype as any).controls;
+}
+
+// undo/redo: tracking indexed actions
+function restoreHistoryAt(index: number) {
+  const c = fabricCanvas.value || canvas;
+  if (!c) return;
+  if (index < 0 || index >= history.value.length) return;
+
+  const json = history.value[index];
+
+  console.log('[history] restore', { index });
+
+  isRestoringHistory = true;
+  c.loadFromJSON(json, () => {
+    c.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    c.setZoom(1);
+
+    c.getObjects().forEach((obj: any) => {
+      normalizeObjectForEditing(obj);
+    });
+
+    c.requestRenderAll();
+    refreshGrid();
+
+    isRestoringHistory = false;
+  });
+}
+
+function undoCanvas() {
+  if (!canUndo.value) return;
+  const targetIndex = historyIndex.value;
+  console.log('[history] undo →', targetIndex);
+  historyIndex.value = targetIndex -1;
+  restoreHistoryAt(targetIndex);
+}
+
+function redoCanvas() {
+  if (!canRedo.value) return;
+  const targetIndex = historyIndex.value + 1;
+  console.log('[history] redo →', targetIndex);
+  historyIndex.value = targetIndex;
+  restoreHistoryAt(targetIndex);
+}
 
 /**
  * Restrict to numeric inches (supports decimals), min 1
@@ -338,7 +613,7 @@ const signTypeOptions = computed(() =>
 const sizeLabel = computed(() => `${formHeightIn.value}\" × ${formWidthIn.value}\"`)
 
 const curved = ref({
-  text: 'Your Curved Text',
+  text: 'Sample Text',
   radius: 150,
   letterSpacing: 0,
   inward: false,
@@ -354,13 +629,50 @@ const curved = ref({
   stroke: null,
   strokeWidth: 0,
 });
-
+const gridVisible = ref(true)    // default ON
 const isCurvedActive = computed(() => activeObj.value && activeObj.value.customType === 'curvedText');
 const selectionState = reactive({
   kind: 'none',
-  // ...
   pathMeta: null as any | null,
 })
+
+function updateSelectionFromCanvasSelection() {
+  if (!canvas) {
+    selectionKind.value = 'none';
+    selectionState.pathMeta = null;
+    return;
+  }
+
+  const obj = canvas.getActiveObject?.();
+  if (!obj) {
+    selectionKind.value = 'none';
+    selectionState.pathMeta = null;
+    return;
+  }
+
+  const kind = getSelectionKind(obj as any);
+  console.log('getSelectionKind(obj), returns :', kind);
+  selectionKind.value = kind;
+
+  if (kind === 'text-on-path') {
+    const anyObj = obj as any;
+    // Prefer sbPathMeta (panel/live), fall back to data.options (initial)
+    const opts = anyObj.sbPathMeta || anyObj.data?.options || {};
+
+    selectionState.pathMeta = {
+      text:          opts.text          ?? 'Sample Text',
+      presetKey:     opts.presetKey     ?? 'ArcUp',      // or whatever your default preset key is
+      letterSpacing: opts.letterSpacing ?? 0,
+      startOffset:   opts.startOffset   ?? 0,
+      align:         opts.align         ?? 'center',
+      flip:          opts.flip          ?? false,
+      showPath:      opts.showPath      ?? false,
+    };
+  } else {
+    // For non text-on-path selections, clear pathMeta
+    selectionState.pathMeta = null;
+  }
+}
 
 
 function bindCanvasSelectionEvents(fCanvas) {
@@ -412,48 +724,6 @@ function bindCanvasSelectionEvents(fCanvas) {
 
 
 
-
-function bindCanvasSelectionEvents(fCanvas) {
-  console.log("bindCanvasSelectionEvents called")
-  const syncActive = () => {
-    const obj = fCanvas.getActiveObject();
-    activeObj.value = obj || null;
-    if (obj && obj.customType === 'curvedText' && obj.curvedTextMeta) {
-      const m = obj.curvedTextMeta;
-      curved.value = {
-        text: m.text,
-        radius: m.radius,
-        letterSpacing: m.letterSpacing,
-        inward: m.inward,
-        clockwise: m.clockwise,
-        startAngle: m.startAngle ?? null,
-        fill: m.style.fill,
-        fontFamily: m.style.fontFamily,
-        fontSize: m.style.fontSize,
-        fontWeight: m.style.fontWeight,
-        fontStyle: m.style.fontStyle,
-        underline: m.style.underline,
-        stroke: m.style.stroke,
-        strokeWidth: m.style.strokeWidth,
-      };
-    }
-  };
-  fCanvas.on('selection:created', (e) => {
-    hydrateStyleFromObject(e.selected?.[0] ?? null);
-    syncActive;
-    
-  });
-  fCanvas.on('selection:updated', (e) => {
-    hydrateStyleFromObject(e.selected?.[0] ?? null);
-    syncActive;
-    
-  });
-  fCanvas.on('selection:cleared', () => { 
-    activeObj.value = null; 
-    hydrateStyleFromObject(null);
-  });
-}
-
 function fitZoomToFace() {
   // STEP 1: We won’t implement full zoom logic yet.
   // If your canvas is already set up, you can call your existing fit function here.
@@ -466,8 +736,87 @@ function fitZoomToFace() {
   if (canvas) fitZoomToFace()
 })*/
 
+const fabricCanvas = ref(null);
 const canvasRef = ref(null);     // <canvas ref="canvasRef">
 const wrapRef = ref(null);       // wrapper <div ref="wrapRef">
+
+/*let gridGroup: fabric.Group | null = null*/
+let canvas: fabric.Canvas | null = null;
+let gridGroup: fabric.Object | null = null;
+function hydrateStyleFromObject(obj: any | null) {
+  
+  if (!obj) {
+    selectionKind.value = 'none'
+    return
+  }
+
+  selectionKind.value = getSelectionKind(obj)
+  console.log("getSelectionKind(obj), returns : "+selectionKind.value) //e.g. returns: rect
+  if (isTextOnPathGroup(obj)) {
+  const o = obj.sbPathMeta || obj.data?.options || {};
+
+  styleState.fill = o.fill ?? styleState.fill;
+  styleState.stroke = o.stroke ?? styleState.stroke;
+  styleState.strokeWidth = o.strokeWidth ?? styleState.strokeWidth;
+  styleState.fontFamily = o.fontFamily ?? styleState.fontFamily;
+  styleState.fontSize = o.fontSize ?? styleState.fontSize;
+  styleState.fontWeight = o.fontWeight ?? styleState.fontWeight;
+  styleState.fontStyle = o.fontStyle ?? styleState.fontStyle;
+
+  return;
+} else {
+    styleState.fill = obj.fill ?? styleState.fill
+    styleState.stroke = obj.stroke ?? styleState.stroke
+    styleState.strokeWidth = obj.strokeWidth ?? styleState.strokeWidth
+    styleState.fontFamily = obj.fontFamily ?? styleState.fontFamily
+    styleState.fontSize = obj.fontSize ?? styleState.fontSize
+    styleState.fontWeight = obj.fontWeight ?? styleState.fontWeight
+    styleState.fontStyle = obj.fontStyle ?? styleState.fontStyle
+  }
+}
+function syncSelectionState() {
+  if (!canvas) return;
+
+  // 1) update selection snapshot (your existing logic)
+  updateSelectedObject();
+
+  // 2) update selectionKind + pathMeta (new logic)
+  updateSelectionFromCanvasSelection();
+
+  // 3) update hasSelection
+  hasSelection.value = !!canvas.getActiveObject?.();
+}
+function onSelectionChange() {
+  const obj = canvas.getActiveObject()
+  if (!obj) return
+  syncStyleStateFromObject(obj)
+}
+
+function onSelectionClear() {
+  styleState.value = {
+    fill: null,
+    stroke: null,
+    strokeWidth: 0,
+    fontFamily: null,
+    fontSize: null,
+    fontWeight: null,
+    fontStyle: null,
+    shadow: null
+  }
+}
+
+
+function clearSelectionState() {
+  // Clear your selectedObject reactive bag
+  Object.keys(selectedObject).forEach(key => delete (selectedObject as any)[key]);
+
+  // Clear kind/meta (however you store them)
+  selectionKind.value = 'none';
+  selectionState.pathMeta = null;
+
+  // Clear hasSelection
+  hasSelection.value = false;
+}
 
 onMounted(async () => {
   await nextTick() // ensure DOM has real sizes
@@ -482,6 +831,10 @@ onMounted(async () => {
     enableRetinaScaling: false,   // critical: avoid initial HiDPI mismatch
     renderOnAddRemove: false      // we'll requestRenderAll() explicitly
   })
+
+  fabricCanvas.value = canvas;
+  // TS-safe global exposure for debugging
+  (window as any).canvas = canvas;
 
   // 2) Give the canvas a *real* backing size based on its wrapper
   const wrap = document.getElementById('canvasWrap')
@@ -512,16 +865,37 @@ onMounted(async () => {
   refreshGrid()
   canvas.requestRenderAll()
 
-  // --- your existing listeners (kept as-is) ---
-  canvas.on('selection:created', updateSelectedObject)
-  canvas.on('selection:updated', updateSelectedObject)
-  canvas.on('selection:cleared', () => {
-    Object.keys(selectedObject).forEach(key => delete selectedObject[key])
-  })
+  // === selection listeners (single, unified pipeline) ===
+canvas.on('selection:created', (e) => {
+  const obj = e.selected?.[0] ?? canvas.getActiveObject?.() ?? null;
 
-  canvas.on('selection:created', () => (hasSelection.value = true))
-  canvas.on('selection:updated', () => (hasSelection.value = true))
-  canvas.on('selection:cleared', () => (hasSelection.value = false))
+  hydrateStyleFromObject(obj);    // keeps styleState/UI in sync with selection
+  updateSelectedObject();         // sets selectionState.kind + selectionState.pathMeta
+  hasSelection.value = true;      // keeps your existing flag correct
+});
+
+canvas.on('selection:updated', (e) => {
+  const obj = e.selected?.[0] ?? canvas.getActiveObject?.() ?? null;
+
+  hydrateStyleFromObject(obj);
+  updateSelectedObject();
+  hasSelection.value = true;
+});
+
+canvas.on('selection:cleared', () => {
+  hydrateStyleFromObject(null);
+
+  // Clear the selectedObject reactive bag if you still use it elsewhere
+  Object.keys(selectedObject).forEach(key => delete (selectedObject as any)[key]);
+
+  selectionState.kind = 'none';
+  selectionState.pathMeta = null;
+
+  selectionKind.value = 'none';
+  hasSelection.value = false;
+});
+
+
   //for line drawing.
   canvas.on('mouse:down', handleCanvasMouseDown)
   canvas.on('mouse:move', handleCanvasMouseMove)
@@ -529,12 +903,41 @@ onMounted(async () => {
 
   canvas.on('object:moving', (e) => {
     if (!snapToGrid.value) return
-    const obj = e.target
+      if (isRestoringHistory) return;
+    const obj = e.target    
     obj.set({
       left: Math.round(obj.left / 24) * 24,
       top: Math.round(obj.top / 24) * 24,
-    })
+    })    
+    pushHistorySnapshot('object:moved');
   })
+  canvas.on('object:added', (e) => {
+    if (isRestoringHistory) return;
+    const target: any = e.target;
+    if (!target) return;
+    if (target.isGrid) return; // don't track grid-only changes
+
+    /*object:added was duplicating the pushHistory snapshots that 
+    addCircle, etc, were calling:
+    pushHistorySnapshot('object:added');*/
+  });
+
+  canvas.on('object:modified', (e) => {
+  if (isRestoringHistory) return;
+  const target: any = e.target;
+  if (!target) return;
+  if (target.isGrid) return;
+  pushHistorySnapshot('object:modified');
+});
+
+  canvas.on('object:removed', (e) => {
+    if (isRestoringHistory) return;
+    const target: any = e.target;
+    if (!target) return;
+    if (target.isGrid) return;
+
+    pushHistorySnapshot('object:removed');
+  });
 
   // 5) Observe wrapper size so layout changes never “blank” the canvas again
   observeCanvasWrapperResize()
@@ -549,44 +952,96 @@ onMounted(async () => {
 
   // Final paint to cover any async font/layout tweaks
   canvas.requestRenderAll()
-  bindCanvasSelectionEvents(canvas);
+ 
+  if (!props.designId) {
+    /*drawGrid(canvas);*/
+    gridVisible.value = true;
+    refreshGrid();
+    /*canvas.requestRenderAll();*/
+  }
+   bindCanvasSelectionEvents(canvas);
+   if(props.designId) {
+    await loadDesignById(props.designId);
+  }
+  // Take initial history snapshot once everything is in a stable state
+  pushHistorySnapshot('initial');
 })
 
-//iterate over all txt glyphs for text on path to apply style change
-function forEachTextGlyphInPathGroup(group: any, cb: (glyph: any) => void) {
-  if (!group || !group._objects) return
+async function loadDesignById(id: number | null) {
+  if (!id) return;
+  if (!fabricCanvas.value) {
+    console.warn('[loadDesignById] Fabric canvas not ready yet');
+    return;
+  }
 
-  group._objects.forEach((o: any) => {
-    if (o.type === 'i-text' || o.type === 'textbox' || o.type === 'text') {
-      cb(o)
+  isLoadingDesign.value = true;
+
+  try {
+    console.log('[loadDesignById] Fetching design', id);
+    const { data: design } = await axios.get(`/api/designs/${id}`);
+
+    currentDesignId.value = design.id;
+    designName.value = design.name || 'My Sign Design';
+
+    const c = fabricCanvas.value;
+
+    // 1) Resolve inches (for the UI fields)
+    const widthInches = design.sign_width ?? pxToInches(design.canvas_width);
+    const heightInches = design.sign_height ?? pxToInches(design.canvas_height);
+
+    if (widthInches) formWidthIn.value = widthInches;
+    if (heightInches) formHeightIn.value = heightInches;
+
+    // 2) Set canvas pixel dimensions straight from DB
+    const pxW = design.canvas_width || c.getWidth();
+    const pxH = design.canvas_height || c.getHeight();
+
+    c.setDimensions({ width: pxW, height: pxH }, { cssOnly: false });
+    c.calcOffset();
+
+    // 3) Restore per-design PPI / grid step
+    if (design.grid_size) {
+      ppi.value = design.grid_size; // now matches what was used when saved
     }
-  })
-}
 
+    // 4) Background color
+    if (design.background_color) {
+      c.backgroundColor = design.background_color;
+    }
 
-function syncStyleStateFromObject(obj: fabric.Object) {
-  styleState.value = {
-    fill: obj.get('fill') as string | null,
-    stroke: obj.get('stroke') as string | null,
-    strokeWidth: obj.get('strokeWidth') as number | undefined,
-    fontFamily: (obj as any).fontFamily ?? null,
-    fontSize: (obj as any).fontSize ?? null,
-    fontWeight: (obj as any).fontWeight ?? null,
-    fontStyle: (obj as any).fontStyle ?? null,
-    shadow: obj.shadow
-      ? {
-          color: obj.shadow.color,
-          blur: obj.shadow.blur,
-          offsetX: obj.shadow.offsetX,
-          offsetY: obj.shadow.offsetY
-        }
-      : null
+    // 5) Load Fabric JSON
+    if (design.canvas_state) {
+      await new Promise((resolve) => {
+        c.loadFromJSON(design.canvas_state, () => {
+          c.setViewportTransform([1, 0, 0, 1, 0, 0]);
+          c.setZoom(1);
+
+          c.getObjects().forEach((obj: any) => {
+            normalizeObjectForEditing(obj);
+          });
+
+          c.requestRenderAll();
+          refreshGrid();
+        });
+      });
+    }
+
+    // 6) Rebuild grid overlay AFTER objects are in place
+    gridVisible.value = design.grid_enabled ?? true;
+    refreshGrid();
+    // New: reset history for this design
+    history.value = [];
+    historyIndex.value = -1;
+    pushHistorySnapshot('loaded design');
+
+    showToast('Design loaded.');
+  } catch (error) {
+    console.error('[loadDesignById] Error loading design', error);
+    window.alert('Failed to load design.');
+  } finally {
+    isLoadingDesign.value = false;
   }
 }
-
-
-
-
 
 function observeCanvasWrapperResize() {
   const wrap = document.getElementById('canvasWrap')
@@ -639,9 +1094,25 @@ function saveDimensions () {
   resizeCanvasNoScale(wIn, hIn, 'top-left') // or 'center'
   editingDims.value = false
 }
+
 // Helpers
-function inchesToPixels (inches) {
+/*function inchesToPixels (inches) {
   return Math.round(inches * props.ppi)
+}*/
+function isTextOnPathGroup(obj: any): boolean {
+  if (!obj) return false;
+  if (obj.data?.kind === 'text-on-path') return true;
+  return obj.type === 'group' && Array.isArray(obj._objects) && obj._objects[0]?.type === 'path';
+}
+
+function inchesToPixels(inches: number | null | undefined): number | null {
+  if (!inches || !ppi.value) return null;
+  return Math.round(inches * ppi.value);
+}
+
+function pxToInches(px: number | null | undefined): number | null {
+  if (!px || !ppi.value) return null;
+  return +(px / ppi.value).toFixed(2); // keep a couple decimals
 }
 
 function setCanvasSizeFromInches (widthIn, heightIn) {
@@ -654,13 +1125,28 @@ function setCanvasSizeFromInches (widthIn, heightIn) {
   canvas.requestRenderAll()
 }
 
-
-
-
 // === Helpers ===
 // Returns active objects, or [] if none
 function getActiveObjects() {
   return (canvas?.getActiveObjects?.() ?? []).filter(Boolean);
+}
+function getSelectionKind(obj: fabric.Object | null | undefined): SelectionKind {
+  if (!obj) return 'none';
+
+  const anyObj = obj as any;
+
+  // Text-on-path: your canonical marker
+  if (anyObj.data?.kind === 'text-on-path') return 'text-on-path';
+
+  const type = anyObj.type;
+
+  if (type === 'i-text' || type === 'textbox' || type === 'text') return 'text';
+  if (type === 'rect') return 'rect';
+  if (type === 'circle') return 'circle';
+  if (type === 'line') return 'line';
+  if (type === 'image') return 'image';
+
+  return 'generic';
 }
 
 // Apply a style patch to ONE object (plain text / shapes)
@@ -796,8 +1282,7 @@ function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number,
   canvas.setHeight(newH)
   canvas.calcOffset()
 
-  // Rebuild grid fresh so cells remain square and fully tiled
-  instance.proxy?.refreshGrid?.()
+  refreshGrid();
 
   canvas.requestRenderAll()
 }
@@ -839,102 +1324,148 @@ function applyStyleToSelection(style: Record<string, any>) {
 
   canvas.requestRenderAll()
 }
+function isTextOnPathGeometryUpdate(o: any) {
+  return (
+    o &&
+    (
+      'preset' in o ||
+      'presetKey' in o ||
+      'pathD' in o ||
+      'text' in o ||
+      'letterSpacing' in o ||
+      'startOffset' in o ||
+      'align' in o ||
+      'flip' in o
+    )
+  );
+}
 
-function handlePropertiesStyleChange(patch: Record<string, any>) {
-  const obj = canvas.getActiveObject()
-  if (!obj) return
+function stripStyleFieldsFromGeometryUpdate(o: any) {
+  const out = { ...(o || {}) };
 
-  const { shadow, gradientFill, ...rest } = patch
+  // Remove UI snapshot style keys that should not clobber existing styling
+  delete out.fill;
+  delete out.fillColor;
+  delete out.stroke;
+  delete out.strokeColor;
+  delete out.strokeWidth;
 
-  // Helper: apply fill/stroke/strokeWidth to all text children in a group
-  const applyFillStrokeToTextChildren = (node: any) => {
-    if (!node) return
+  delete out.fontFamily;
+  delete out.fontSize;
+  delete out.fontWeight;
+  delete out.fontStyle;
 
-    if (node.type === 'group') {
-      // Recurse into nested groups
-      if (Array.isArray((node as any)._objects)) {
-        (node as any)._objects.forEach(child => applyFillStrokeToTextChildren(child))
-      }
-      return
-    }
+  delete out.opacity;
 
-    // Only target text-like objects, not paths
-    if (
-      node.type === 'text' ||
-      node.type === 'i-text' ||
-      node.type === 'textbox'
-    ) {
-      if ('fill' in rest) {
-        node.set('fill', rest.fill)
-      }
-      if ('stroke' in rest) {
-        node.set('stroke', rest.stroke)
-      }
-      if ('strokeWidth' in rest) {
-        node.set('strokeWidth', rest.strokeWidth)
-      }
-    }
-  }
+  return out;
+}
 
-  // If this is a group (e.g., Text-on-Path), push fill/stroke into its text children
-  if (obj.type === 'group') {
-    applyFillStrokeToTextChildren(obj)
 
-    // Remove these from "rest" so they are not applied to the group itself
-    if ('fill' in rest) delete rest.fill
-    if ('stroke' in rest) delete rest.stroke
-    if ('strokeWidth' in rest) delete rest.strokeWidth
-  }
+function handlePropertiesStyleChange(update: any) {
+  if (!canvas) return;
+  const obj = canvas.getActiveObject?.();
+  if (!obj) return;
 
-  // Apply remaining properties (fontSize, fontWeight, etc.) directly to the main object
-  if (Object.keys(rest).length > 0) {
-    obj.set(rest)
-  }
+  // Gradient fill: build a fabric.Gradient and apply as obj.fill
+  if (update?.gradientFill) {
+    const g = update.gradientFill;
 
-  // Shadow requires a fabric.Shadow instance, and should be applied on the group
-  if ('shadow' in patch) {
-    if (!shadow) {
-      obj.set('shadow', null)
-    } else {
-      obj.set('shadow', new fabric.Shadow({
-        color: shadow.color ?? '#000000',
-        blur: shadow.blur ?? 0,
-        offsetX: shadow.offsetX ?? 0,
-        offsetY: shadow.offsetY ?? 0
-      }))
-    }
-  }
+    // Compute gradient coords based on object bounds
+    const w = (obj as any).getScaledWidth?.() ?? (obj as any).width ?? 0;
+    const h = (obj as any).getScaledHeight?.() ?? (obj as any).height ?? 0;
 
-  // Apply gradient fill if requested
-  if (gradientFill) {
-    // Map direction → coords in percentage space
-    let coords: fabric.Gradient['coords']
-    switch (gradientFill.direction) {
+    // Fallback to something non-zero
+    const ww = Math.max(1, Number(w) || 1);
+    const hh = Math.max(1, Number(h) || 1);
+
+    let coords: any;
+
+    switch (g.direction) {
       case 'vertical':
-        coords = { x1: 0, y1: 0, x2: 0, y2: 1 }
-        break
+        coords = { x1: 0, y1: 0, x2: 0, y2: hh };
+        break;
       case 'diagonal':
-        coords = { x1: 0, y1: 0, x2: 1, y2: 1 }
-        break
+        coords = { x1: 0, y1: 0, x2: ww, y2: hh };
+        break;
       case 'horizontal':
       default:
-        coords = { x1: 0, y1: 0, x2: 1, y2: 0 }
-        break
+        coords = { x1: 0, y1: 0, x2: ww, y2: 0 };
+        break;
     }
 
     const gradient = new fabric.Gradient({
       type: 'linear',
-      gradientUnits: 'percentage',
       coords,
-      colorStops: gradientFill.colorStops
-    })
+      colorStops: (g.colorStops || []).map((cs: any) => ({
+        offset: Number(cs.offset),
+        color: String(cs.color),
+      })),
+    });
 
-    obj.set('fill', gradient)
+    (obj as any).set('fill', gradient);
+    (obj as any).dirty = true;
+    canvas.requestRenderAll();
+    pushHistorySnapshot('styleChange');
+    return;
   }
 
-  canvas.renderAll()
-  syncStyleStateFromObject(obj)
+  // 1) Shadow: universal (all object types)
+  if ('shadow' in update) {
+    if (update.shadow == null) {
+      (obj as any).set('shadow', null);
+    } else {
+      (obj as any).set('shadow', new fabric.Shadow({
+        color: update.shadow.color ?? 'rgba(0,0,0,0.35)',
+        blur: update.shadow.blur ?? 0,
+        offsetX: update.shadow.offsetX ?? 0,
+        offsetY: update.shadow.offsetY ?? 0,
+      }));
+    }
+
+    (obj as any).dirty = true;
+    canvas.requestRenderAll();
+    pushHistorySnapshot('styleChange');
+    return;
+  }
+
+  // 2) Text-on-path: route text style into your meta/reflow pipeline
+  if (isTextOnPathGroup(obj)) {
+    const mapped = normalizeTextStyleUpdate(update);
+    const opts: any = {};
+
+    if ('fill' in mapped) opts.fill = mapped.fill;
+    if ('opacity' in mapped) opts.opacity = mapped.opacity;
+
+    if ('stroke' in mapped) opts.stroke = mapped.stroke;
+    if ('strokeWidth' in mapped) opts.strokeWidth = mapped.strokeWidth;
+
+    if ('fontFamily' in mapped) opts.fontFamily = mapped.fontFamily;
+    if ('fontSize' in mapped) opts.fontSize = mapped.fontSize;
+    if ('fontWeight' in mapped) opts.fontWeight = mapped.fontWeight;
+    if ('fontStyle' in mapped) opts.fontStyle = mapped.fontStyle;
+
+    tweakSelectedTextOnPath(opts);
+
+    canvas.requestRenderAll();
+    pushHistorySnapshot('styleChange');
+    return;
+  }
+
+  // 3) Everything else: actually apply the patch to the active object
+  const patch = normalizeTextStyleUpdate(update);
+
+  // IMPORTANT: apply
+  (obj as any).set(patch);
+
+  (obj as any).dirty = true;
+  obj.setCoords?.();
+
+  canvas.requestRenderAll();
+  pushHistorySnapshot('styleChange');
 }
+
+
+
 
 function getSelectionTextObjects(): fabric.Object[] {
   if (!canvas) return []
@@ -944,6 +1475,7 @@ function getSelectionTextObjects(): fabric.Object[] {
 }
 
 async function onChangeFontFamily(family: string) {
+
   const fontMeta = FONT_CATALOG.find(f => f.family === family)
   if (!fontMeta) return
 
@@ -969,38 +1501,42 @@ async function onChangeFontFamily(family: string) {
 }
 
 function updateSelectedObject() {
-
-  const sel = canvas?.getActiveObject()
+  const sel = canvas?.getActiveObject();
 
   if (!sel) {
-    selectionState.kind = 'none'
-    selectionState.pathMeta = null
-    return
+    selectionState.kind = 'none';
+    selectionState.pathMeta = null;
+
+    selectionKind.value = 'none';
+    hasSelection.value = false;
+    return;
   }
 
-  if (isTextOnPathGroup(sel)) {
-    selectionState.kind = 'text-on-path'
+  hasSelection.value = true;
 
-    // Pull meta off the group (or its custom props)
-    // Use whatever you stored at creation time.
-    const meta = sel.sbPathMeta || {
-      text: sel.text || 'Your curved text',
-      presetKey: sel.pathPresetKey || 'ArcUp',
-      letterSpacing: sel.letterSpacing ?? 2,
-      startOffset: sel.startOffset ?? 0,
-      align: sel.pathAlign || 'center',
-      flip: !!sel.flipBaseline,
-      showPath: !!sel.showPath,
-    }
+  // Prefer using getSelectionKind everywhere so you’re not maintaining two classification systems
+  const kind = getSelectionKind(sel as any);
+  selectionState.kind = kind;
+  selectionKind.value = kind;
 
-    selectionState.pathMeta = meta
+  if (kind === 'text-on-path' && isTextOnPathGroup(sel)) {
+    // Use sbPathMeta if it exists, otherwise fall back to the serialized meta you showed earlier
+    const opts = (sel as any).sbPathMeta
+      || (sel as any).data?.options
+      || {};
+
+    selectionState.pathMeta = {
+      text:          opts.text ?? 'Your curved text',
+      presetKey:     opts.presetKey ?? 'ArcUp',
+      letterSpacing: opts.letterSpacing ?? 2,
+      startOffset:   opts.startOffset ?? 0,
+      align:         opts.align ?? 'center',
+      flip:          !!opts.flip,
+      showPath:      !!opts.showPath,
+    };
   } else {
-    selectionState.kind = /* 'text' | 'circle' | etc */
-    selectionState.pathMeta = null
+    selectionState.pathMeta = null;
   }
-
-
-
 }
 
  
@@ -1096,55 +1632,93 @@ function drawGrid(canvas) {
   }
 }
 
-const gridVisible = ref(true)    // default ON
-
-let gridGroup: fabric.Group | null = null
-
 function removeGrid() {
-  if (canvas && gridGroup) {
-    canvas.remove(gridGroup)
-    gridGroup = null
-  }
+  if (!canvas) return;
+
+  console.log(
+    '[removeGrid] before:',
+    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
+  );
+
+  canvas.getObjects().forEach((obj) => {
+    const anyObj = obj as any;
+    if (anyObj.isGrid || anyObj.name === 'grid') {
+      canvas!.remove(obj);
+    }
+  });
+
+  gridGroup = null;
+
+  console.log(
+    '[removeGrid] after:',
+    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
+  );
 }
 
 function refreshGrid() {
-  if (!canvas) return
-  removeGrid()
-  if (!gridVisible.value) { canvas.requestRenderAll(); return }
+  if (!canvas) return;
 
-  const w = canvas.getWidth()
-  const h = canvas.getHeight()
-  const step = ppi.value // 12 px per inch cell
-  const z = canvas.getZoom() || 1
-const lines: fabric.Object[] = []
+  console.log(
+    '[refreshGrid] gridVisible:',
+    gridVisible.value,
+    'objects:',
+    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
+  );
 
-for (let x = 0; x <= w; x += step) {
-  lines.push(new fabric.Line([x, 0, x, h], {
-    stroke: '#ccffff',
-    strokeWidth: 1 / z,
-    selectable: false, evented: false, excludeFromExport: true
-  }))
-}
-for (let y = 0; y <= h; y += step) {
-  lines.push(new fabric.Line([0, y, w, y], {
-    stroke: '#ccffff',
-    strokeWidth: 1 / z,
-    selectable: false, evented: false, excludeFromExport: true
-  }))
-}
+  removeGrid();
 
-gridGroup = new fabric.Group(lines, {
-  left: 0, top: 0,
-  selectable: false,
-  evented: false,
-  excludeFromExport: true,
-  name: 'grid'
-})
-canvas.add(gridGroup)
+  if (!gridVisible.value) {
+    canvas.requestRenderAll();
+    return;
+  }
 
-// Use the safe helper:
-sendObjectToBackSafe(canvas, gridGroup)
-  canvas.requestRenderAll()
+  const w = canvas.getWidth();
+  const h = canvas.getHeight();
+  const step = ppi.value;
+  const z = canvas.getZoom() || 1;
+
+  const lines: fabric.Object[] = [];
+
+  for (let x = 0; x <= w; x += step) {
+    lines.push(new fabric.Line([x, 0, x, h], {
+      stroke: '#ccffff',
+      strokeWidth: 1 / z,
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+      isGrid: true,
+    }) as any);
+  }
+
+  for (let y = 0; y <= h; y += step) {
+    lines.push(new fabric.Line([0, y, w, y], {
+      stroke: '#ccffff',
+      strokeWidth: 1 / z,
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+      isGrid: true,
+    }) as any);
+  }
+
+  gridGroup = new fabric.Group(lines, {
+    left: 0,
+    top: 0,
+    selectable: false,
+    evented: false,
+    excludeFromExport: true,
+    isGrid: true,
+    name: 'grid',
+  } as any);
+
+  canvas.add(gridGroup);
+  sendObjectToBackSafe(canvas, gridGroup);
+  canvas.requestRenderAll();
+
+  console.log(
+    '[refreshGrid] after rebuild:',
+    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
+  );
 }
 
 /** Call this any time zoom changes to keep grid lines thin */
@@ -1162,7 +1736,6 @@ function afterResizeOrLayoutChange() { refreshGrid() }
 // after you change zoom:
 function afterZoomChange() { updateGridStrokeWidthForZoom() }
 
-
 function moveToBackSafe(obj: any, minIndex = 0) {
   if (!canvas || !obj) return
   if (typeof obj.sendToBack === 'function') { obj.sendToBack(); return canvas.requestRenderAll() }
@@ -1170,7 +1743,9 @@ function moveToBackSafe(obj: any, minIndex = 0) {
   // fallback: mutate stack
   const arr = (canvas as any)._objects; if (!Array.isArray(arr)) return
   const i = arr.indexOf(obj); if (i < 0) return
-  arr.splice(i, 1); arr.splice(minIndex, 0, obj); canvas.requestRenderAll()
+  arr.splice(i, 1); arr.splice(minIndex, 0, obj);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('zOrderChange');
 }
 
 function bottomIndexAboveGrid(): number {
@@ -1189,7 +1764,9 @@ function moveToFrontSafe(obj: any, maxIndex?: number) {
   }
   const arr = (canvas as any)._objects; if (!Array.isArray(arr)) return
   const i = arr.indexOf(obj); if (i < 0) return
-  arr.splice(i, 1); arr.push(obj); canvas.requestRenderAll()
+  arr.splice(i, 1); arr.push(obj); 
+  canvas.requestRenderAll();
+  pushHistorySnapshot('zOrderChange');
 }
 
 // Example: if you have a resize handler:
@@ -1231,7 +1808,7 @@ function sendObjectToBackSafe(c: fabric.Canvas | null | undefined, obj: any) {
 }
 
 function deformText( selectedTextObject ){
-  var curvedText = new fabric.CurvedText('Your Curved Text', {
+  var curvedText = new fabric.CurvedText('Sample Text', {
       left: 100,
       top: 100,
       radius: 50, // Radius of the curve
@@ -1256,6 +1833,7 @@ function addText() {
   canvas.add(text);
   canvas.setActiveObject(text);
   canvas.requestRenderAll();
+  pushHistorySnapshot('addText');
 }
 
 function addRectangle() {
@@ -1271,7 +1849,9 @@ function addRectangle() {
   canvas.add(rect);
   canvas.setActiveObject(rect);
   canvas.requestRenderAll();
+  pushHistorySnapshot('addRectangle');
 }
+
 
 function addCircle() {
   const circle = new fabric.Circle({
@@ -1285,6 +1865,7 @@ function addCircle() {
   canvas.add(circle);
   canvas.setActiveObject(circle);
   canvas.requestRenderAll();
+  pushHistorySnapshot('addCircle');
 }
 
 function beginLineDrawMode() {
@@ -1300,10 +1881,9 @@ function beginLineDrawMode() {
   canvas.renderAll()
 }
 
-
 // === [CurvedText] reactive UI state ===
 const curvedUI = reactive({
-  text: 'Your Curved Text',
+  text: 'Sample Text',
   radius: 150,
   startAngle: 270,
   spacing: 0,
@@ -1314,7 +1894,7 @@ const curvedUI = reactive({
 
 
 
-function curveSelectedText() {
+/*function curveSelectedText() {
   const obj = canvas?.getActiveObject?.();
   if (!obj) return;
 
@@ -1390,7 +1970,7 @@ function uncurveSelectedText() {
   canvas.setActiveObject(flat);
   canvas.requestRenderAll();
 }
-
+*/
 
 // === [CurvedText] reflow the active curved text group ===
 function reflowActiveCurved(partial) {
@@ -1470,7 +2050,7 @@ function normalizeTextStyleUpdate(u) {
   if (!u || typeof u !== 'object') return out;
 
   // colors
-  if ('fill' in u) out.fill = String(u.fill);
+  if ('fill' in u) out.fill = u.fill; // allow strings OR fabric.Gradient OR patterns
   if ('color' in u) out.fill = String(u.color);
   if ('stroke' in u) out.stroke = String(u.stroke);
   if ('strokeColor' in u) out.stroke = String(u.strokeColor);
@@ -1493,15 +2073,18 @@ function normalizeTextStyleUpdate(u) {
   if ('fontStyle' in u) out.fontStyle = u.fontStyle;
   if ('italic' in u) out.fontStyle = u.italic ? 'italic' : 'normal';
 
+  // shadow
+  if ('shadowEnabled' in u) out.shadowEnabled = true;
+  if ('shadowColor' in u) out.shadowColor = String(u.shadowColor);;
+  if ('shadowBlur' in u) out.shadowBlur = Number(u.shadowBlur);
+  if ('shadowOffsetX' in u) out.shadowOffsetX = Number(u.shadowOffsetX);
+  if ('shadowOffsetY' in u) out.shadowOffsetY = Number(u.shadowOffsetY);
+
   return out;
 }
 
 
-function applyTextStyleToActive(update) {
-  if (!canvas) return;
-  const obj = canvas.getActiveObject?.();
-  if (!obj) return;
-
+/*function applyTextStyleToActive(update) {
   const mapped = normalizeTextStyleUpdate(update);
 
   if (obj.curved) {
@@ -1523,20 +2106,69 @@ function applyTextStyleToActive(update) {
     return;
   }
 
-  // Plain Fabric text objects
-  const patch = {};
-  if ('fill'        in mapped) patch.fill       = mapped.fill;
-  if ('stroke'      in mapped) patch.stroke     = mapped.stroke;
-  if ('strokeWidth' in mapped) patch.strokeWidth= mapped.strokeWidth;
-  if ('fontFamily'  in mapped) patch.fontFamily = mapped.fontFamily;
-  if ('fontWeight'  in mapped) patch.fontWeight = mapped.fontWeight;
-  if ('fontStyle'   in mapped) patch.fontStyle  = mapped.fontStyle;
-  if ('fontSize'    in mapped) patch.fontSize   = mapped.fontSize;
 
-  obj.set(patch);
-  canvas.requestRenderAll();
+// NEW: Text-On-Path group styling (same concept as curved)
+  if (isTextOnPathGroup(obj)) {
+    obj.sbPathMeta = obj.sbPathMeta || obj.data?.options || {};
+    obj.sbPathMeta = { ...obj.sbPathMeta };
+
+    // apply mapped styles into sbPathMeta
+    if ('fill'        in mapped) obj.sbPathMeta.fill        = mapped.fill;
+    if ('stroke'      in mapped) obj.sbPathMeta.stroke      = mapped.stroke;
+    if ('strokeWidth' in mapped) obj.sbPathMeta.strokeWidth = mapped.strokeWidth;
+
+    if ('fontFamily'  in mapped) obj.sbPathMeta.fontFamily  = mapped.fontFamily;
+    if ('fontWeight'  in mapped) obj.sbPathMeta.fontWeight  = mapped.fontWeight;
+    if ('fontStyle'   in mapped) obj.sbPathMeta.fontStyle   = mapped.fontStyle; // keep as fontStyle, do not convert to italic boolean
+    if ('fontSize'    in mapped) obj.sbPathMeta.fontSize    = mapped.fontSize;
+
+    // keep serialized options aligned (optional but recommended)
+    if ((obj as any).data?.options) {
+      (obj as any).data.options = { ...(obj as any).data.options, ...obj.sbPathMeta };
+    }
+
+    // Rebuild/reflow the text-on-path glyphs using your existing builder
+    reflowTextOnPath(obj, obj.sbPathMeta); // we will wire this to your existing createTextOnPath logic
+    canvas.requestRenderAll();
+    return;
+  }
+}
+*/
+
+  function reflowTextOnPath(group: any, meta: any) {
+  // 1) Remove existing glyphs, keep path at index 0
+  const pathObj = group._objects?.[0];
+  if (!pathObj) return;
+
+  // Remove everything except the path
+  const toRemove = group._objects.slice(1);
+  toRemove.forEach(o => group.remove(o));
+
+  // 2) Rebuild glyphs using your existing createTextOnPath logic
+  // Easiest: call createTextOnPath(meta) and steal its glyphs (without replacing transforms)
+  const fresh = createTextOnPath(meta) as any;
+
+  // fresh._objects[0] is a new path; keep existing pathObj unless pathD changed
+  const freshPath = fresh._objects[0];
+  if (meta.pathD && pathObj.path?.toString?.() !== freshPath.path?.toString?.()) {
+    // replace path object when shape changed
+    group.remove(pathObj);
+    group.insertAt(freshPath, 0, false);
+  }
+
+  // Add new glyphs
+  fresh._objects.slice(1).forEach((g: any) => group.add(g));
+
+  // 3) Preserve meta
+  group.sbPathMeta = meta;
+
+  // 4) Refresh geometry
+  group._calcBounds?.();
+  group._updateObjectsCoords?.();
+  group.setCoords();
 }
 
+  
 
 
 function uploadImage() {
@@ -1583,71 +2215,151 @@ function deleteSelected() {
     canvas.discardActiveObject();
     canvas.requestRenderAll();
   }
+  pushHistorySnapshot('deleteSelected');
 }
 
 function alignLeft() {
-  const obj = assignActiveObj();
-  if (obj) {
+  if (!canvas) return;
+
+  withActiveObjects((obj) => {
     obj.set({ left: 0 });
-    canvas.requestRenderAll();
-  }
+    obj.setCoords(); // 🔑 keep bounding box / hit test in sync
+  });
+  pushHistorySnapshot('alignLeft')
 }
 
 function alignCenter() {
- const obj = assignActiveObj();
-  if (obj) {
-    obj.set({ left: canvas.getWidth() / 2 - obj.getScaledWidth() / 2 });
-    canvas.requestRenderAll();
-  }
+ if (!canvas) return;
+
+  const canvasWidth = canvas.getWidth();
+  withActiveObjects((obj) => {
+    const width = obj.getScaledWidth();
+    obj.set({ left: (canvasWidth - width) / 2 });
+    obj.setCoords();
+  });
+  pushHistorySnapshot('alignCenter')
 }
 
 function alignRight() {
-  const obj = assignActiveObj();
-  if (obj) {
-    obj.set({ left: canvas.getWidth() - obj.getScaledWidth() });
-    canvas.requestRenderAll();
-  }
+  if (!canvas) return;
+
+  const canvasWidth = canvas.getWidth();
+  withActiveObjects((obj) => {
+    const width = obj.getScaledWidth();
+    obj.set({ left: canvasWidth - width });
+    obj.setCoords();
+  });
+  pushHistorySnapshot('alignRight')
 }
 
 function alignTop() {
-  const obj = assignActiveObj();
-  if (obj) {
+  if (!canvas) return;
+
+  withActiveObjects((obj) => {
     obj.set({ top: 0 });
-    canvas.requestRenderAll();
-  }
+    obj.setCoords();
+  });
+  pushHistorySnapshot('alignTop')
 }
 
 function alignMiddle() {
-  const obj = assignActiveObj();
-  if (obj) {
-    obj.set({ top: canvas.getHeight() / 2 - obj.getScaledHeight() / 2 });
-    canvas.requestRenderAll();
-  }
+  if (!canvas) return;
+
+  const canvasHeight = canvas.getHeight();
+  withActiveObjects((obj) => {
+    const height = obj.getScaledHeight();
+    obj.set({ top: (canvasHeight - height) / 2 });
+    obj.setCoords();
+  });
+  pushHistorySnapshot('alignMiddle')
 }
 
 function alignBottom() {
-  const obj = assignActiveObj();
-  if (obj) {
-    obj.set({ top: canvas.getHeight() - obj.getScaledHeight() });
-    canvas.requestRenderAll();
-  }
+  if (!canvas) return;
+
+  const canvasHeight = canvas.getHeight();
+  withActiveObjects((obj) => {
+    const height = obj.getScaledHeight();
+    obj.set({ top: canvasHeight - height });
+    obj.setCoords();
+  });
+  pushHistorySnapshot('alignBottom')
+}
+
+
+//ensure objs moved with align tools maintain bounding box coordinates.
+function withActiveObjects(fn: (obj: fabric.Object) => void) {
+  if (!canvas) return;
+
+  const active = canvas.getActiveObjects();
+  if (!active.length) return;
+
+  active.forEach((obj) => fn(obj));
+  canvas.requestRenderAll();
 }
 
 function groupObjects() {
-  const active = canvas.getActiveObject();
-  if (active && active.type === 'activeSelection') {
-    active.toGroup();
-    canvas.requestRenderAll();
+  if (!canvas) return;
+
+  const activeObjects = canvas.getActiveObjects();
+  if (!activeObjects.length) return;
+
+  // If there's only one object and it's already a group, nothing to do
+  if (activeObjects.length === 1 && (activeObjects[0] as any).type === 'group') {
+    return;
   }
+
+  const group = new fabric.Group(activeObjects, {
+    selectable: true,
+    evented: true,
+  });
+
+  activeObjects.forEach(obj => canvas!.remove(obj));
+
+  canvas.add(group);
+  canvas.setActiveObject(group);
+  group.setCoords();
+  canvas.requestRenderAll();
 }
 
+
 function ungroupObjects() {
-  const active = canvas.getActiveObject();
-  if (active && active.type === 'group') {
-    active.toActiveSelection();
-    canvas.requestRenderAll();
+  if (!canvas) return;
+
+  const active = canvas.getActiveObject() as any;
+  if (!active || active.type !== 'group') return;
+
+  const group = active as fabric.Group;
+  const items = (group as any)._objects || [];
+
+  // Restore original child state (positions, transforms)
+  if (typeof (group as any)._restoreObjectsState === 'function') {
+    (group as any)._restoreObjectsState();
   }
+
+  // Remove the group from the canvas
+  canvas.remove(group);
+  canvas.discardActiveObject();
+
+  // Add each child back to the canvas as a standalone object
+  items.forEach((obj: fabric.Object) => {
+    obj.set({
+      selectable: true,
+      evented: true,
+    });
+    obj.setCoords();
+    canvas.add(obj);
+  });
+
+  // Optionally select them all as a multi-selection
+  if (items.length) {
+    const selection = new fabric.ActiveSelection(items, { canvas });
+    canvas.setActiveObject(selection);
+  }
+
+  canvas.requestRenderAll();
 }
+
 
 //sign-type template components
 function addBasePostForSign(signType) {
@@ -1675,27 +2387,95 @@ function addBasePostForSign(signType) {
 
     canvas.add(post);
     post.sendToBack();
+  }  
+ 
+}
+
+async function saveDesign() {
+  if (!fabricCanvas.value) {
+    showToast('Canvas is not ready yet.', 'error');
+    return;
   }
 
-  //Save or update user design.
-  async function saveDesign() {
-    const canvasData = canvas.toJSON();
+  isSaving.value = true;
+
+  try {
+    const c = fabricCanvas.value;
+    const fabricJson = c.toJSON();
+
+    // 1) Resolve inches from form / props / fallback from px
+    const widthInches =
+      formWidthIn.value
+      ?? props.signWidth
+      ?? pxToInches(c.getWidth());
+
+    const heightInches =
+      formHeightIn.value
+      ?? props.signHeight
+      ?? pxToInches(c.getHeight());
+
+    const pxW = c.getWidth();
+    const pxH = c.getHeight();
+
+    // 2) Compute effective PPI for this design, if we can
+    let effectivePpi = ppi.value;
+    if (widthInches && pxW) {
+      effectivePpi = pxW / widthInches; // e.g. 576 / 48 = 12
+    }
+
+    // 3) Build payload
     const payload = {
-      name: design.value?.name || 'Untitled Design',
-      canvas_data: canvasData,
+      name: designName.value || null,
+      slug: null,
+
+      sign_type: props.signType || 'wall_sign_cabinet',
+      sign_category: props.signCategory || null,
+
+      // inches
+      sign_width: widthInches,
+      sign_height: heightInches,
+      sign_depth: props.signDepth ?? null,
+
+      // pixels
+      canvas_width: pxW,
+      canvas_height: pxH,
+
+      // treat grid_size as "ppi" (or at least step size)
+      grid_size: effectivePpi,
+      grid_enabled: gridVisible.value ?? true,
+      snap_to_grid: snapToGrid.value ?? false,
+      background_color: backgroundColor.value || '#ffffff',
+
+      canvas_state: fabricJson,
+      settings: {},
+
+      order_id: null,
+      status: 'draft',
     };
 
-    if (design.value?.id) {
-      // Update existing design
-      await axios.put(`/api/user/canvases/${design.value.id}`, payload);
-    } else {
-      // Create new design
-      const response = await axios.post('/api/user/canvases', payload);
-      design.value = response.data; // Update current session with new ID
-    }
-  }
+    const isUpdate = !!currentDesignId.value;
+    const url = isUpdate
+      ? `/api/designs/${currentDesignId.value}`
+      : `/api/designs`;
+    const method = isUpdate ? 'put' : 'post';
 
- 
+    const { data: design } = await axios[method](url, payload);
+
+    currentDesignId.value = design.id;
+    designName.value = design.name || designName.value;
+    // For brand-new designs, rewrite URL to include ?design_id=...
+    if (!isUpdate && design.id) {
+      const newUrl = `/canvas?design_id=${design.id}`;
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    showToast(isUpdate ? 'Design updated successfully.' : 'Design saved successfully.');
+  } catch (err) {
+    console.error('[saveDesign] Error:', err);
+    showToast('Failed to save design. Please try again.', error);
+  } finally {
+    isSaving.value = false;
+  }
 }
 
 function assignActiveObj(){
@@ -1703,8 +2483,6 @@ function assignActiveObj(){
 }
 // after creating gridGroup and canvas.add(gridGroup)
 moveToBackSafe(gridGroup, 0)
-
-
 
 function applyUserDimensions(widthIn, heightIn, ppi) {
   const wPx = Math.max(1, Math.round(widthIn * ppi));
@@ -1724,7 +2502,7 @@ const PATH_PRESETS = {
 };
 
 function addTextOnPath({
-  text = 'Your curved text',
+  text = 'Sample Text',
   pathD = PATH_PRESETS.ArcUp,
   fontFamily = 'Arial',
   fontSize = 48,
@@ -1738,23 +2516,99 @@ function addTextOnPath({
   canvas.add(group);
   canvas.setActiveObject(group);
   canvas.requestRenderAll();
-  updateSelectedObject() // make sure panel sees the new object
+  updateSelectedObject()
+  pushHistorySnapshot('addTextOnPath');
+   // make sure panel sees the new object
 }
 
 // If the selected object is a text-on-path group, update it
 function tweakSelectedTextOnPath(opts: any) {
-  const sel = canvas?.getActiveObject()
-  if (!sel || !isTextOnPathGroup(sel)) return
+  const sel = canvas?.getActiveObject();
+  if (!sel || !isTextOnPathGroup(sel)) return;
+  // Normalize keys first
+  let normalized = normalizeTextOnPathOpts(opts);
 
-  console.log('tweakSelectedTextOnPath payload:', opts)
-
-  // Update the group meta
-  sel.sbPathMeta = {
-    ...(sel.sbPathMeta || {}),
-    ...opts,
+  // If this is a geometry/preset update, do NOT allow style fields to overwrite current meta
+  if (isTextOnPathGeometryUpdate(normalized)) {
+    normalized = stripStyleFieldsFromGeometryUpdate(normalized);
   }
-  canvas.requestRenderAll()
+
+  const anySel = sel as any;   
+
+  const base = {
+    ...(anySel.data?.options || {}),
+    ...(anySel.sbPathMeta || {}),
+  };
+
+  const merged = { ...base, ...normalized };
+
+  anySel.sbPathMeta = merged;
+  anySel.data = anySel.data || { kind: 'text-on-path', version: 1, options: {} };
+  anySel.data.options = merged;
+
+  const needsRebuild = isTextOnPathGeometryUpdate(opts) || isTextOnPathGeometryUpdate(normalized);
+
+  if (needsRebuild) {
+    replaceTextOnPathGroup(anySel, merged);
+    return;
+  }
+
+  applyTextOnPathStyleInPlace(anySel, merged);
+  canvas?.requestRenderAll();
 }
+
+
+
+  function normalizeTextOnPathOpts(opts: any) {
+  const out = { ...(opts || {}) };
+
+  // Prefer explicit modern keys, but support legacy UI keys
+  if (out.fill == null && out.fillColor != null) out.fill = out.fillColor;
+  if (out.stroke == null && out.strokeColor != null) out.stroke = out.strokeColor;
+
+  // Normalize preset naming: prefer the direct user selection
+  if (out.preset != null) out.presetKey = out.preset;
+  if (out.presetKey != null && typeof out.presetKey === 'string') {
+    // keep as-is
+  }
+
+  // If you ever receive bold/italic booleans, normalize to Fabric props
+  if (out.bold != null && out.fontWeight == null) out.fontWeight = out.bold ? 'bold' : 'normal';
+  if (out.italic != null && out.fontStyle == null) out.fontStyle = out.italic ? 'italic' : 'normal';
+
+  return out;
+}
+
+
+  // Otherwise: style-only changes can be applied in-place to glyph children
+  function applyTextOnPathStyleInPlace(group: any, meta: any) {
+  const glyphs = group._objects?.slice(1) || [];
+
+  for (const g of glyphs) {
+    if (!g || g.type !== 'text') continue;
+
+    if (meta.fill != null) g.set('fill', meta.fill);
+    if (meta.opacity != null) g.set('opacity', meta.opacity);
+
+    if (meta.fontFamily != null) g.set('fontFamily', meta.fontFamily);
+    if (meta.fontSize != null) g.set('fontSize', meta.fontSize);
+    if (meta.fontWeight != null) g.set('fontWeight', meta.fontWeight);
+    if (meta.fontStyle != null) g.set('fontStyle', meta.fontStyle);
+
+    if (meta.stroke != null) g.set('stroke', meta.stroke);
+    if (meta.strokeWidth != null) g.set('strokeWidth', meta.strokeWidth);
+
+    // CRITICAL: mark child dirty for cached rendering
+    g.dirty = true;
+  }
+console.log('glyph[0] fill after:', group._objects?.[1]?.fill);
+  // CRITICAL: mark group dirty too
+  group.dirty = true;
+
+  group.setCoords();
+}
+
+
 
 // After JSON load:
 function loadCanvasFromJson(json) {
@@ -1763,11 +2617,6 @@ function loadCanvasFromJson(json) {
     canvas.getObjects().forEach(obj => rehydrateTextOnPath(obj));
     canvas.renderAll();
   });
-}
-
-function isTextOnPathGroup(obj: any) {
-  return obj?.data?.kind === 'text-on-path'
-    || (Array.isArray(obj?._objects) && obj._objects[0]?.type === 'path')
 }
 
 function handlePathTextChange(payload) {
@@ -1782,130 +2631,77 @@ function handlePathTextApply(payload) {
   updateTextOnPath(obj, payload)
 }
 
-function hydrateStyleFromObject(obj: any | null) {
-  
-  if (!obj) {
-    selectionKind.value = 'none'
-    console.log("hydrateStyleFromObject finds !obj false, sets selectionKind to none")
-    return
+
+
+
+
+
+
+
+
+  function syncStyleStateFromObject(obj: any) {
+    if (!obj) return;
   }
 
-  selectionKind.value = getSelectionKind(obj)
-  console.log("getSelectionKind(obj), returns : "+selectionKind.value) //e.g. returns: rect
-  if (isTextOnPathGroup(obj) && obj.data?.options) {
-    const o = obj.data.options
-    styleState.fill = o.fill ?? styleState.fill
-    styleState.stroke = o.stroke ?? styleState.stroke
-    styleState.strokeWidth = o.strokeWidth ?? styleState.strokeWidth
-    styleState.fontFamily = o.fontFamily ?? styleState.fontFamily
-    styleState.fontSize = o.fontSize ?? styleState.fontSize
-    styleState.fontWeight = o.fontWeight ?? styleState.fontWeight
-    styleState.fontStyle = o.fontStyle ?? styleState.fontStyle
-  } else {
-    styleState.fill = obj.fill ?? styleState.fill
-    styleState.stroke = obj.stroke ?? styleState.stroke
-    styleState.strokeWidth = obj.strokeWidth ?? styleState.strokeWidth
-    styleState.fontFamily = obj.fontFamily ?? styleState.fontFamily
-    styleState.fontSize = obj.fontSize ?? styleState.fontSize
-    styleState.fontWeight = obj.fontWeight ?? styleState.fontWeight
-    styleState.fontStyle = obj.fontStyle ?? styleState.fontStyle
-  }
-}
+  function replaceTextOnPathGroup(oldGroup: any, meta: any) {
+  if (!canvas) return;
 
-function getSelectionKind(obj: any) {
-   
-  if (!obj) return 'none'
-    console.log("obj.isType?.kind is "+obj.isType?.kind)
-  if (obj.data?.kind === 'text-on-path' ||
-      (Array.isArray(obj._objects) && obj._objects[0]?.type === 'path')) {
-    return 'text-on-path'
-  }
+  // Preserve transform + group-level styling
+  const preserved = {
+    left: oldGroup.left,
+    top: oldGroup.top,
+    angle: oldGroup.angle,
+    scaleX: oldGroup.scaleX,
+    scaleY: oldGroup.scaleY,
+    skewX: oldGroup.skewX,
+    skewY: oldGroup.skewY,
+    flipX: oldGroup.flipX,
+    flipY: oldGroup.flipY,
+    opacity: oldGroup.opacity,
+    shadow: oldGroup.shadow, // keep drop shadow across rebuilds
+    selectable: oldGroup.selectable,
+    evented: oldGroup.evented,
+  };
 
-  if (obj.isType?.('i-text') || obj.isType?.('text')) {
-    return 'text'
+  const idx = canvas.getObjects().indexOf(oldGroup);
+
+  // Build a fresh group using your existing builder
+  const next = createTextOnPath(meta) as any;
+
+  // Safety: ensure we are not inserting non-Fabric children
+  const bad = (next?._objects || []).filter((o: any) => !o || typeof o._set !== 'function');
+  if (bad.length) {
+    console.error('[TextOnPath] replace aborted: invalid children in rebuilt group', bad);
+    return;
   }
 
-  if (obj.isType?.('rect')) return 'rect'
-  if (obj.isType?.('circle')) return 'circle'
-  if (obj.isType?.('line')) return 'line'
+  // Keep metadata conventions intact
+  next.sbPathMeta = meta;
+  next.data = next.data || { kind: 'text-on-path', version: 1, options: {} };
+  next.data.kind = 'text-on-path';
+  next.data.version = next.data.version ?? 1;
+  next.data.options = meta;
 
-  return 'generic'
-}
+  // Apply preserved transforms/styles
+  next.set(preserved);
+  next.setCoords();
 
-function onSelectionChange() {
-  const obj = canvas.getActiveObject()
-  if (!obj) return
-  syncStyleStateFromObject(obj)
-}
+  // Replace in canvas (safe across Fabric versions)
+  canvas.remove(oldGroup);
+  canvas.add(next);
 
-function onSelectionClear() {
-  styleState.value = {
-    fill: null,
-    stroke: null,
-    strokeWidth: 0,
-    fontFamily: null,
-    fontSize: null,
-    fontWeight: null,
-    fontStyle: null,
-    shadow: null
-  }
-}
-
-function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
-  if (currentTool.value !== 'line') return
-  if (!canvas) return
-
-  const pointer = canvas.getPointer(opt.e)
-
-  lineStart = { x: pointer.x, y: pointer.y }
-
-  activeLine = new fabric.Line(
-    [pointer.x, pointer.y, pointer.x, pointer.y],
-    {
-      stroke: '#000000',
-      strokeWidth: 2,
-      selectable: true,
-      evented: true,
-      // optional:
-      // strokeUniform: true
-    }
-  )
-
-  canvas.add(activeLine)
-  isDrawingLine = true
-}
-
-function handleCanvasMouseMove(opt: fabric.IEvent<MouseEvent>) {
-  if (currentTool.value !== 'line') return
-  if (!isDrawingLine) return
-  if (!canvas || !activeLine) return
-
-  const pointer = canvas.getPointer(opt.e)
-
-  activeLine.set({
-    x2: pointer.x,
-    y2: pointer.y
-  })
-
-  canvas.renderAll()
-}
-
-function handleCanvasMouseUp(_opt: fabric.IEvent<MouseEvent>) {
-  if (currentTool.value !== 'line') return
-  if (!canvas) return
-
-  if (isDrawingLine && activeLine) {
-    activeLine.setCoords()
+  // Restore z-index if possible
+  if (typeof (canvas as any).moveTo === 'function' && idx >= 0) {
+    (canvas as any).moveTo(next, idx);
   }
 
-  isDrawingLine = false
-  activeLine = null
+  canvas.setActiveObject(next);
+  canvas.requestRenderAll();
 
-  // Exit line mode after drawing one line.
-  currentTool.value = 'none'
-  canvas.defaultCursor = 'default'
-  canvas.renderAll()
+  // Keep selection state/panel synced
+  updateSelectedObject();
 }
+
 
 
 </script>

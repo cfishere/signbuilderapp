@@ -7,7 +7,7 @@ const routes = [
   {
     path: '/canvas',
     name: 'canvas',
-    component: () => import('@/Pages/Canvas.vue'),
+    component: () => import('@/Pages/CanvasPage.vue'),
     props: route => ({    
       /*email: route.query.email || null, 
       width: Number(route.query.width),

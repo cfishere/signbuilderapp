@@ -1,9 +1,10 @@
 // tests/vitest.setup.js
 import { vi } from 'vitest';
 
+
 let canvasSpy;
 
-vi.mock('fabric', async (importOriginal) => {
+/*vi.mock('fabric', async (importOriginal) => {
   const actual = await importOriginal();
 
   const mockCanvasInstance = {
@@ -33,7 +34,7 @@ vi.mock('fabric', async (importOriginal) => {
       }
     }
   };
-});
+});*/
 
 // Expose spy globally so your test can use it
-globalThis.__canvasSpy = () => canvasSpy;
+/*globalThis.__canvasSpy = () => canvasSpy;*/

@@ -308,7 +308,7 @@
     class="w-full p-2 mb-3 border rounded"
     type="text"
     v-model="pathUI.text"
-    placeholder="Your curved text"
+    placeholder="Sample Text"
     @input="emit('path-text-change', buildPathPayload())"
   />
 
@@ -491,7 +491,7 @@ const PRESETS = [
 
 // Local UI for path text controls
 const pathUI = reactive({
-  text: 'Your curved text',
+  text: 'Sample Text',
   preset: PRESETS[0].value,
   pathD: PRESETS[0].d,
   fontFamily: 'Arial',
@@ -560,6 +560,8 @@ function toggleShadow() {
  */
 function updateShadow() {
   if (!shadowEnabled.value) return
+  console.log('[OPP] updateShadow fired', { enabled: shadowEnabled.value, ...shadow });
+  if (!shadowEnabled.value) return;
 
   emit('change-style', {
     shadow: {
