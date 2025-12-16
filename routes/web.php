@@ -2,7 +2,8 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\DashboardController; //recommended to add per chatgtp.  Controller also created.
-use App\Http\Controllers\CanvasController;
+use App\Http\Controllers\API\DesignController;
+use App\Http\Controllers\DesignIndexController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,7 +13,25 @@ use Illuminate\Support\Facades\Artisan;
 Route::inertia('/', 'GetStarted')->name('getstarted');
 
 /*Route::inertia('/canvas', 'Canvas')->name('canvas.get');*/
-Route::get('/canvas', [CanvasController::class, 'show']);
+Route::get('/canvas', function (Request $request) {
+    return Inertia::render('CanvasPage', [           
+        'designId' => $request->query('design_id')
+            ? (int) $request->query('design_id')
+            : null,
+        'signType' => $request->query('sign_type') ?? $request->query('signType'),
+    ]);
+})->name('canvas.get');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/designs', [DesignIndexController::class, 'index'])->name('designs.index');
+});
+
+Route::middleware(['auth'])->prefix('api')->group(function () {    
+    Route::post('/designs', [DesignController::class, 'store'])->name('designs.store');
+    Route::get('/designs/{design}', [DesignController::class, 'show'])->name('designs.show');
+    Route::put('/designs/{design}', [DesignController::class, 'update'])->name('designs.update');
+    Route::delete('/designs/{design}', [DesignController::class, 'destroy'])->name('designs.destroy');
+});
 
 //AUTH ROUTES
 // Show login form

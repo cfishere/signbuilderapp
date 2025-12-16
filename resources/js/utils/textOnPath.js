@@ -58,6 +58,8 @@ export function createTextOnPath(opts) {
     fontWeight = 'normal',
     fontStyle = 'normal',
     fill = '#999999',
+    stroke = null,
+    strokeWidth = 0,
     opacity = 1,
     letterSpacing = 0,
     startOffset = 0,
@@ -89,13 +91,24 @@ export function createTextOnPath(opts) {
   const glyphs = [];
   for (let i = 0; i < text.length; i++) {
     const w = widths[i];
+    if (!Number.isFinite(w) || w <= 0) {
+      cursor += letterSpacing; // or just continue
+      continue;
+    }
     const mid = cursor + w / 2;
-    if (mid > totalLen) break;
-    const { x, y, angle } = pointAndAngleAtLength(path, mid, flip);
+    if (!Number.isFinite(mid) || mid > totalLen) break;
+    const p = pointAndAngleAtLength(path, mid, flip);
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.angle)) {
+      break;
+    }
+    const { x, y, angle } = p;
+
     glyphs.push(new fabric.Text(text[i], {
       left: x, top: y, angle,
       originX: 'center', originY: 'center',
       fontFamily, fontSize, fontWeight, fontStyle, fill, opacity,
+      stroke: stroke || undefined,
+      strokeWidth: strokeWidth ?? 0,
       selectable: false, evented: false, objectCaching: true
     }));
     cursor += w + letterSpacing;
@@ -114,11 +127,18 @@ export function createTextOnPath(opts) {
     version: 1,
     options: {
       text, pathD, fontFamily, fontSize, fontWeight, fontStyle,
-      fill, opacity, letterSpacing, startOffset, align, flip, debug
+      fill, opacity, letterSpacing, startOffset, align, flip, stroke, strokeWidth, debug
     }
   };
   group.set('data', meta); // some environments honor this
   group.data = meta;       // mocks sometimes require direct assign
+
+  // Make the panel-facing meta start with the same values
+  // That gives us something for selectionState.pathMeta to mirror:
+  group.sbPathMeta = meta.options;
+  
+  // Keep legacy sbPathMeta in sync so selectionState.pathMeta has data
+  group.sbPathMeta = meta.options;
 
   const origToObject = group.toObject.bind(group);
   group.toObject = function (additionalProps = []) {

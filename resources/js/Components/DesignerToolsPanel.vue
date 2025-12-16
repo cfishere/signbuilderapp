@@ -3,6 +3,24 @@
     <h2 class="text-lg font-bold mb-4">Design Tools</h2>
 
     <!-- existing tools -->
+   
+  <button
+    type="button"
+    class="btn mx-2 my-1"
+    :disabled="!canUndo"
+    @click="$emit('undo')"
+  >
+    ⟲ Undo
+  </button>
+
+  <button
+    type="button"
+    class="btn mx-2 my-1"
+    :disabled="!canRedo"
+    @click="$emit('redo')"
+  >
+    ⟳ Redo
+  </button>
     <button class="btn mx-2 my-1" @click="$emit('add-text')">Text</button>
     <button class="btn mx-2 my-1" @click="$emit('add-curved-text')" title="Curved Text">
       Curved Text
@@ -61,6 +79,8 @@
 type FontOpt = { family: string } | string
 
 const props = defineProps<{  
+  canUndo: boolean
+  canRedo: boolean
   snapToGrid: boolean
   gridVisible?: boolean
   hasSelection: boolean
@@ -69,7 +89,8 @@ const props = defineProps<{
 const emit = defineEmits([
   'add-text','add-curved-text','add-rectangle','add-circle','upload-image','bring-to-front','send-to-back',
   'delete-selected','align-left','align-center','align-right','align-top','align-middle',
-  'align-bottom','group','ungroup','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool'])
+  'align-bottom','group','ungroup','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool','undo','redo'
+])
 
 </script>
 
