@@ -4,7 +4,6 @@ import { validateTemplate } from '@/utils/validateTemplate';
 import { normalizeTemplateForCanvas } from '@/utils/normalizeTemplateForCanvas';
 import { createTemplateFromCanvas as createFromCanvas } from '@/utils/createTemplateFromCanvas';
 
-
 // Mock Fabric.js canvas
 function mockCanvasWithObjects(objects) {
   return {
@@ -15,21 +14,36 @@ function mockCanvasWithObjects(objects) {
 }
 
 describe('Template Validation & Normalization', () => {
-  it('should validate and normalize a basic illuminated cabinet template', () => {
+  it('validates and normalizes a basic illuminated cabinet template', () => {
     const raw = {
       face: { width: 72, height: 36 },
       cabinet: { width: 75, height: 39, borderWidthInches: 1.5, depth: 8 },
       lighting: { type: 'led', count: 2 },
     };
-    const validated = validateTemplate(raw);
-    const normalized = normalizeTemplateForCanvas(validated);   
+
+    const validation = validateTemplate(raw);
+    expect(validation.ok).toBe(true);
+    expect(validation.errors).toHaveLength(0);
+
+    const normalized = normalizeTemplateForCanvas(raw);
+    expect(normalized.face.width).toBe(72);
+    expect(normalized.face.height).toBe(36);
+    expect(normalized.cabinet?.depth).toBe(8);
+    expect(normalized.lighting?.count).toBe(2);
+    expect(normalized.signType).toBe('custom');
   });
 
-  it('should normalize even an incomplete template', () => {
+  it('normalizes even an incomplete template', () => {
     const raw = { face: {} };
-    const validated = validateTemplate(raw);
-    const normalized = normalizeTemplateForCanvas(validated);
+
+    const validation = validateTemplate(raw);
+    expect(validation.ok).toBe(true);
+    expect(validation.warnings.length).toBeGreaterThan(0);
+
+    const normalized = normalizeTemplateForCanvas(raw);
     expect(normalized.face.shape).toBe('flat');
+    expect(normalized.face.width).toBe(0);
+    expect(normalized.face.height).toBe(0);
   });
 });
 

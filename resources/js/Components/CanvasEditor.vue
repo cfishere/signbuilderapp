@@ -82,6 +82,33 @@
         Current face: <span class="font-medium">{{ sizeLabel }}</span>
       </p>
 
+  <div class="mt-4 space-y-2">
+    <h4 class="font-semibold text-sm">Canvas Background</h4>
+    <div class="flex items-center gap-2">
+      <input
+        type="color"
+        v-model="backgroundColor"
+        class="h-10 w-14 border rounded cursor-pointer"
+        aria-label="Canvas background color"
+        @change="onBackgroundColorCommit"
+      />
+      <input
+        type="text"
+        v-model="backgroundColor"
+        class="flex-1 border rounded px-2 py-1 text-sm"
+        placeholder="#ffffff"
+        @change="onBackgroundColorCommit"
+      />
+      <button
+        type="button"
+        class="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+        @click="onBackgroundColorReset"
+      >
+        Reset
+      </button>
+    </div>
+  </div>
+
 <!-- 
 
       <div class="grid grid-cols-2 gap-3">
@@ -378,6 +405,7 @@ const styleState = reactive({
   fill: '#000000' as string | null,
   stroke: null as string | null,
   strokeWidth: 0,
+  opacity: 1 as number | null,
   fontFamily: 'Arial' as string | null,
   fontSize: 40 as number | null,
   fontWeight: '400' as string | null,
@@ -762,6 +790,7 @@ function hydrateStyleFromObject(obj: any | null) {
   styleState.fontSize = o.fontSize ?? styleState.fontSize;
   styleState.fontWeight = o.fontWeight ?? styleState.fontWeight;
   styleState.fontStyle = o.fontStyle ?? styleState.fontStyle;
+  styleState.opacity = typeof obj.opacity === 'number' ? obj.opacity : styleState.opacity;
 
   return;
 } else {
@@ -772,6 +801,7 @@ function hydrateStyleFromObject(obj: any | null) {
     styleState.fontSize = obj.fontSize ?? styleState.fontSize
     styleState.fontWeight = obj.fontWeight ?? styleState.fontWeight
     styleState.fontStyle = obj.fontStyle ?? styleState.fontStyle
+    styleState.opacity = typeof obj.opacity === 'number' ? obj.opacity : styleState.opacity
   }
 }
 function syncSelectionState() {
@@ -793,16 +823,15 @@ function onSelectionChange() {
 }
 
 function onSelectionClear() {
-  styleState.value = {
-    fill: null,
-    stroke: null,
-    strokeWidth: 0,
-    fontFamily: null,
-    fontSize: null,
-    fontWeight: null,
-    fontStyle: null,
-    shadow: null
-  }
+  styleState.fill = null
+  styleState.stroke = null
+  styleState.strokeWidth = 0
+  styleState.opacity = 1
+  styleState.fontFamily = null
+  styleState.fontSize = null
+  styleState.fontWeight = null
+  styleState.fontStyle = null
+  ;(styleState as any).shadow = null
 }
 
 
@@ -816,6 +845,31 @@ function clearSelectionState() {
 
   // Clear hasSelection
   hasSelection.value = false;
+}
+
+function setBackgroundColor(color: string) {
+  const normalized = color || '#ffffff';
+  backgroundColor.value = normalized;
+  if (!canvas) return;
+
+  // Use Fabric helper when available; otherwise fall back to setting the prop directly.
+  const c: any = canvas as any;
+  if (typeof c.setBackgroundColor === 'function') {
+    c.setBackgroundColor(normalized, () => canvas?.requestRenderAll());
+  } else {
+    c.backgroundColor = normalized;
+    canvas.requestRenderAll();
+  }
+}
+
+function onBackgroundColorCommit() {
+  setBackgroundColor(backgroundColor.value);
+  pushHistorySnapshot('backgroundColor');
+}
+
+function onBackgroundColorReset() {
+  setBackgroundColor('#ffffff');
+  pushHistorySnapshot('backgroundColor');
 }
 
 onMounted(async () => {
@@ -835,6 +889,7 @@ onMounted(async () => {
   fabricCanvas.value = canvas;
   // TS-safe global exposure for debugging
   (window as any).canvas = canvas;
+  setBackgroundColor(backgroundColor.value);
 
   // 2) Give the canvas a *real* backing size based on its wrapper
   const wrap = document.getElementById('canvasWrap')
@@ -1006,7 +1061,9 @@ async function loadDesignById(id: number | null) {
 
     // 4) Background color
     if (design.background_color) {
-      c.backgroundColor = design.background_color;
+      setBackgroundColor(design.background_color);
+    } else {
+      setBackgroundColor('#ffffff');
     }
 
     // 5) Load Fabric JSON
@@ -1360,6 +1417,66 @@ function stripStyleFieldsFromGeometryUpdate(o: any) {
   return out;
 }
 
+// Shared helper to apply a gradient descriptor to a text-on-path group
+function applyGradientToTextOnPathGroup(group: any, desc: any) {
+  if (!group || !desc || !Array.isArray(desc.colorStops)) return false;
+  const glyphs = group._objects?.slice(1) || [];
+  if (!glyphs.length) return false;
+
+  const union = glyphs.reduce(
+    (acc: any, glyph: any) => {
+      const b = glyph.getBoundingRect?.(true, true) || { left: 0, top: 0, width: 0, height: 0 };
+      const right = b.left + b.width;
+      const bottom = b.top + b.height;
+      return {
+        left: Math.min(acc.left, b.left),
+        top: Math.min(acc.top, b.top),
+        right: Math.max(acc.right, right),
+        bottom: Math.max(acc.bottom, bottom),
+      };
+    },
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
+  );
+  const unionWidth = Math.max(1, union.right - union.left);
+  const unionHeight = Math.max(1, union.bottom - union.top);
+
+  glyphs.forEach((glyph: any) => {
+    const b = glyph.getBoundingRect?.(true, true) || { left: 0, top: 0, width: unionWidth, height: unionHeight };
+    const dx = b.left - union.left;
+    const dy = b.top - union.top;
+
+    let coords: any;
+    switch (desc.direction) {
+      case 'vertical':
+        coords = { x1: 0 - dx, y1: 0 - dy, x2: 0 - dx, y2: unionHeight - dy };
+        break;
+      case 'diagonal':
+        coords = { x1: 0 - dx, y1: 0 - dy, x2: unionWidth - dx, y2: unionHeight - dy };
+        break;
+      case 'horizontal':
+      default:
+        coords = { x1: 0 - dx, y1: 0 - dy, x2: unionWidth - dx, y2: 0 - dy };
+        break;
+    }
+
+    const grad = new fabric.Gradient({
+      type: 'linear',
+      gradientUnits: 'pixels',
+      coords,
+      colorStops: (desc.colorStops || []).map((cs: any) => ({
+        offset: Number(cs.offset),
+        color: String(cs.color),
+      })),
+    });
+
+    glyph.set('fill', grad);
+    glyph.dirty = true;
+  });
+
+  group.dirty = true;
+  return true;
+}
+
 
 function handlePropertiesStyleChange(update: any) {
   if (!canvas) return;
@@ -1369,41 +1486,46 @@ function handlePropertiesStyleChange(update: any) {
   // Gradient fill: build a fabric.Gradient and apply as obj.fill
   if (update?.gradientFill) {
     const g = update.gradientFill;
+    const colorStops = (g.colorStops || []).map((cs: any) => ({
+      offset: Number(cs.offset),
+      color: String(cs.color),
+    }));
 
-    // Compute gradient coords based on object bounds
-    const w = (obj as any).getScaledWidth?.() ?? (obj as any).width ?? 0;
-    const h = (obj as any).getScaledHeight?.() ?? (obj as any).height ?? 0;
+    // Simple percentage-based gradient for non-path objects
+    const makePercentGradient = (direction: string) => {
+      let coords: any;
+      switch (direction) {
+        case 'vertical':
+          coords = { x1: 0, y1: 0, x2: 0, y2: 1 };
+          break;
+        case 'diagonal':
+          coords = { x1: 0, y1: 0, x2: 1, y2: 1 };
+          break;
+        case 'horizontal':
+        default:
+          coords = { x1: 0, y1: 0, x2: 1, y2: 0 };
+          break;
+      }
+      return new fabric.Gradient({
+        type: 'linear',
+        gradientUnits: 'percentage',
+        coords,
+        colorStops,
+      });
+    };
 
-    // Fallback to something non-zero
-    const ww = Math.max(1, Number(w) || 1);
-    const hh = Math.max(1, Number(h) || 1);
-
-    let coords: any;
-
-    switch (g.direction) {
-      case 'vertical':
-        coords = { x1: 0, y1: 0, x2: 0, y2: hh };
-        break;
-      case 'diagonal':
-        coords = { x1: 0, y1: 0, x2: ww, y2: hh };
-        break;
-      case 'horizontal':
-      default:
-        coords = { x1: 0, y1: 0, x2: ww, y2: 0 };
-        break;
+    // Text-on-path groups: use union of glyph bounds and offset per glyph
+    if (isTextOnPathGroup(obj)) {
+      const anySel: any = obj;
+      applyGradientToTextOnPathGroup(anySel, g);
+      anySel.sbPathMeta = { ...(anySel.sbPathMeta || {}), fill: g };
+      anySel.dirty = true;
+    } else {
+      const gradient = makePercentGradient(g.direction);
+      (obj as any).set('fill', gradient);
+      (obj as any).dirty = true;
     }
 
-    const gradient = new fabric.Gradient({
-      type: 'linear',
-      coords,
-      colorStops: (g.colorStops || []).map((cs: any) => ({
-        offset: Number(cs.offset),
-        color: String(cs.color),
-      })),
-    });
-
-    (obj as any).set('fill', gradient);
-    (obj as any).dirty = true;
     canvas.requestRenderAll();
     pushHistorySnapshot('styleChange');
     return;
@@ -2059,6 +2181,14 @@ function normalizeTextStyleUpdate(u) {
   if ('strokeWidth' in u) out.strokeWidth = Number(u.strokeWidth);
   if ('width' in u && ('stroke' in u || 'strokeColor' in u)) out.strokeWidth = Number(u.width);
 
+  // opacity (allow 0–1 or 0–100)
+  if ('opacity' in u) {
+    const raw = Number(u.opacity);
+    if (Number.isFinite(raw)) {
+      out.opacity = raw > 1 ? raw / 100 : raw;
+    }
+  }
+
   // font family / size
   if ('fontFamily' in u) out.fontFamily = String(u.fontFamily);
   if ('family' in u) out.fontFamily = String(u.family);
@@ -2587,7 +2717,12 @@ function tweakSelectedTextOnPath(opts: any) {
   for (const g of glyphs) {
     if (!g || g.type !== 'text') continue;
 
-    if (meta.fill != null) g.set('fill', meta.fill);
+    // Preserve gradients: if meta.fill is a descriptor, rebuild gradient spanning the group
+    if (meta.fill && meta.fill.colorStops) {
+      applyGradientToTextOnPathGroup(group, meta.fill);
+    } else if (meta.fill != null) {
+      g.set('fill', meta.fill);
+    }
     if (meta.opacity != null) g.set('opacity', meta.opacity);
 
     if (meta.fontFamily != null) g.set('fontFamily', meta.fontFamily);
@@ -2685,6 +2820,64 @@ function handlePathTextApply(payload) {
   // Apply preserved transforms/styles
   next.set(preserved);
   next.setCoords();
+
+  // Re-apply gradient fill if present in meta
+  if (meta?.fill?.colorStops) {
+    const glyphs = next._objects?.slice(1) || [];
+    if (glyphs.length) {
+      const union = glyphs.reduce(
+        (acc: any, glyph: any) => {
+          const b = glyph.getBoundingRect?.(true, true) || { left: 0, top: 0, width: 0, height: 0 };
+          const right = b.left + b.width;
+          const bottom = b.top + b.height;
+          return {
+            left: Math.min(acc.left, b.left),
+            top: Math.min(acc.top, b.top),
+            right: Math.max(acc.right, right),
+            bottom: Math.max(acc.bottom, bottom),
+          };
+        },
+        { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity }
+      );
+      const unionWidth = Math.max(1, union.right - union.left);
+      const unionHeight = Math.max(1, union.bottom - union.top);
+
+      glyphs.forEach((glyph: any) => {
+        const b = glyph.getBoundingRect?.(true, true) || { left: 0, top: 0, width: unionWidth, height: unionHeight };
+        const dx = b.left - union.left;
+        const dy = b.top - union.top;
+
+        let coords: any;
+        switch (meta.fill.direction) {
+          case 'vertical':
+            coords = { x1: 0 - dx, y1: 0 - dy, x2: 0 - dx, y2: unionHeight - dy };
+            break;
+          case 'diagonal':
+            coords = { x1: 0 - dx, y1: 0 - dy, x2: unionWidth - dx, y2: unionHeight - dy };
+            break;
+          case 'horizontal':
+          default:
+            coords = { x1: 0 - dx, y1: 0 - dy, x2: unionWidth - dx, y2: 0 - dy };
+            break;
+        }
+
+        const grad = new fabric.Gradient({
+          type: 'linear',
+          gradientUnits: 'pixels',
+          coords,
+          colorStops: (meta.fill.colorStops || []).map((cs: any) => ({
+            offset: Number(cs.offset),
+            color: String(cs.color),
+          })),
+        });
+
+        glyph.set('fill', grad);
+        glyph.dirty = true;
+      });
+
+      next.dirty = true;
+    }
+  }
 
   // Replace in canvas (safe across Fabric versions)
   canvas.remove(oldGroup);
