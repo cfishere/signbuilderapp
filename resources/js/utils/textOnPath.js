@@ -142,7 +142,8 @@ export function createTextOnPath(opts) {
 
   const origToObject = group.toObject.bind(group);
   group.toObject = function (additionalProps = []) {
-    const out = origToObject(['data', ...additionalProps]);
+    const extras = Array.isArray(additionalProps) ? additionalProps : [];
+    const out = origToObject(['data', ...extras]);
     if (!out.data && group.data) out.data = group.data; // belt & suspenders
     return out;
   };

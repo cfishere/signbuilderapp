@@ -77,6 +77,31 @@
             </button>
           </div>
         </div>
+
+        <!-- Opacity -->
+        <div>
+          <label class="block text-xs font-medium">Opacity</label>
+          <div class="flex items-center gap-2 mt-1">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              :value="opacityPercent"
+              class="flex-1 accent-emerald-600"
+              @input="onOpacityInput($event)"
+            />
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              class="w-16 p-1 text-xs border rounded"
+              :value="opacityPercent"
+              @change="onOpacityInput($event)"
+            />
+            <span class="text-xs text-gray-500">%</span>
+          </div>
+        </div>
       </div>
 
 <!-- GRADIENT FILL (text + shapes) -->
@@ -449,6 +474,7 @@ const props = defineProps<{
     fill?: string | null
     stroke?: string | null
     strokeWidth?: number
+    opacity?: number | null
     fontFamily?: string | null
     fontSize?: number | null
     fontWeight?: string | null
@@ -479,6 +505,12 @@ const kindLabelMap: Record<string, string> = {
 }
 
 const kindLabel = computed(() => kindLabelMap[props.kind] ?? 'Object')
+
+const opacityPercent = computed(() => {
+  const raw = typeof props.styleState.opacity === 'number' ? props.styleState.opacity : 1
+  const clamped = Math.max(0, Math.min(1, raw))
+  return Math.round(clamped * 100)
+})
 
 // --- Text-on-Path presets (move from DesignerToolsPanel.vue) ---
 /** Path presets */
@@ -587,8 +619,7 @@ const gradientUI = reactive({
 // Which kinds support gradient?
 const gradientSupported = computed(() =>
   props.hasSelection &&
-  ['text', 'rect', 'circle', 'generic'].includes(props.kind)
-  // add 'text-on-path' here later if desired
+  ['text', 'text-on-path', 'rect', 'circle', 'generic'].includes(props.kind)
 )
 
 // Emit gradientFill descriptor (CanvasEditor will build fabric.Gradient)
@@ -619,6 +650,12 @@ const emit = defineEmits<{
 
 function onStyleChange(patch: Record<string, any>) {
   emit('change-style', patch)
+}
+
+function onOpacityInput(evt: Event) {
+  const val = Number((evt.target as HTMLInputElement).value)
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(val) ? val : 100))
+  onStyleChange({ opacity: clamped / 100 })
 }
 
 watch(

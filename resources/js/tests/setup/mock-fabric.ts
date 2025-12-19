@@ -7,11 +7,27 @@ console.info('[vitest] mock-fabric loaded')
 class FabricBase {
   left = 0; top = 0; angle = 0; scaleX = 1; scaleY = 1; flipX = false; flipY = false;
   selectable = true; evented = true; objectCaching = false; type = 'base';
+  _objects: any[] = [];
   constructor(opts: Record<string, any> = {}) { Object.assign(this, opts) }
   set(props: Record<string, any>) { Object.assign(this, props); return this }
   toObject(extra: string[] = []) {
-    const base: any = super.toObject(extra)
-    base.objects = this._objects.map((o: any) => o?.toObject?.() ?? { type: o?.type ?? 'unknown' })
+    // Build a minimal object snapshot without relying on a Fabric prototype chain
+    const base: any = {
+      type: this.type,
+      left: this.left,
+      top: this.top,
+      angle: this.angle,
+      scaleX: this.scaleX,
+      scaleY: this.scaleY,
+      flipX: this.flipX,
+      flipY: this.flipY,
+      selectable: this.selectable,
+      evented: this.evented,
+      objectCaching: this.objectCaching,
+    }
+    if (Array.isArray(this._objects)) {
+      base.objects = this._objects.map((o: any) => o?.toObject?.() ?? { type: o?.type ?? 'unknown' })
+    }
     // If extra props requested (like 'data'), include them:
     extra?.forEach((k) => { if (k in this) base[k] = (this as any)[k] })
     // Safety: if caller forgot to pass extra but we have a data blob, include it
@@ -28,7 +44,7 @@ class FabricGroup extends FabricBase { type = 'group'; _objects: any[]; canvas: 
   toObject(extra: string[] = []) {
     const base: any = super.toObject(extra)
     base.objects = this._objects.map((o: any) => o?.toObject?.() ?? { type: o?.type ?? 'unknown' })
-    include explicitly requested extras and ensure 'data' persists
+    // Include explicitly requested extras and ensure 'data' persists
     extra?.forEach((k) => { if (k in this) base[k] = (this as any)[k] })
     if (!base.data && (this as any).data) base.data = (this as any).data
     return base
