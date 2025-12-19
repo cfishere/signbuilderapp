@@ -220,6 +220,8 @@
       @align-bottom="alignBottom"
       @group="groupObjects"
       @ungroup="ungroupObjects"  
+      @copy="copySelection"
+      @paste="pasteClipboard"
       @file-upload="handleFileUpload"    
       :fonts="availableFonts"  
     />
@@ -280,6 +282,46 @@ import { fabric } from '@/utils/fabricRef';
 import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
 import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
 import { applyFontFamily } from '@/utils/applyFontFamily'
+
+// Guard Fabric toObject/clone against non-iterable additionalProps
+function guardToObject(proto: any) {
+  if (!proto || typeof proto.toObject !== 'function') return;
+  const orig = proto.toObject;
+  proto.toObject = function (additionalProps?: any) {
+    const extras = Array.isArray(additionalProps)
+      ? additionalProps
+      : additionalProps
+      ? [additionalProps]
+      : [];
+    return orig.call(this, extras);
+  };
+}
+
+guardToObject(fabric.Object.prototype);
+guardToObject((fabric.Text as any)?.prototype);
+guardToObject((fabric.Textbox as any)?.prototype);
+guardToObject((fabric.IText as any)?.prototype);
+guardToObject((fabric.Rect as any)?.prototype);
+guardToObject((fabric.Group as any)?.prototype);
+guardToObject((fabric.ActiveSelection as any)?.prototype);
+guardToObject((fabric.Circle as any)?.prototype);
+guardToObject((fabric.Ellipse as any)?.prototype);
+guardToObject((fabric.Triangle as any)?.prototype);
+guardToObject((fabric.Line as any)?.prototype);
+guardToObject((fabric.Path as any)?.prototype);
+guardToObject((fabric.Polygon as any)?.prototype);
+guardToObject((fabric.Polyline as any)?.prototype);
+
+// Also guard clone to normalize propertiesToInclude
+const __origClone = fabric.Object.prototype.clone;
+fabric.Object.prototype.clone = function (callback: any, propertiesToInclude?: any) {
+  const extras = Array.isArray(propertiesToInclude)
+    ? propertiesToInclude
+    : propertiesToInclude
+    ? [propertiesToInclude]
+    : [];
+  return __origClone.call(this, callback, extras);
+};
 
 async function onFontFamilyChange(family: string) {
   const entry = FONT_CATALOG.find(f => f.family === family) ?? { family, weights: [400] }
@@ -399,6 +441,23 @@ const hasSelection = ref(false)
   | 'unknown';*/
 const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')  
 const isLoadingDesign = ref(false)
+let clipboard: any = null
+let clipboardJson: string | null = null
+
+const keyHandler = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement | null;
+  const tag = target?.tagName?.toLowerCase();
+  const isInput = tag === 'input' || tag === 'textarea' || target?.isContentEditable;
+  if (isInput) return;
+  if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'c') {
+    e.preventDefault();
+    copySelection();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'v') {
+    e.preventDefault();
+    pasteClipboard();
+  }
+};
 
 const SHADOW_KEYS = ['shadowColor', 'shadowBlur', 'shadowOffsetX', 'shadowOffsetY']
 const styleState = reactive({
@@ -875,6 +934,8 @@ function onBackgroundColorReset() {
 onMounted(async () => {
   await nextTick() // ensure DOM has real sizes
 
+  window.addEventListener('keydown', keyHandler);
+
   // 1) Create Fabric with stable first-paint options
   canvas = new fabric.Canvas('canvasEl', {
     backgroundColor: 'white',
@@ -1021,6 +1082,10 @@ canvas.on('selection:cleared', () => {
   // Take initial history snapshot once everything is in a stable state
   pushHistorySnapshot('initial');
 })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', keyHandler);
+});
 
 async function loadDesignById(id: number | null) {
   if (!id) return;
@@ -2764,6 +2829,205 @@ function handlePathTextApply(payload) {
   const obj = canvas?.getActiveObject()
   if (!obj || !isTextOnPathGroup(obj)) return
   updateTextOnPath(obj, payload)
+}
+
+function copySelection() {
+  if (!canvas) return;
+  const active = canvas.getActiveObject?.();
+  if (!active) {
+    console.warn('[copySelection] no active object');
+    return;
+  }
+
+  console.info('[copySelection] cloning', { type: active.type, id: (active as any).id, hasData: !!active.data });
+  clipboard = null;
+  clipboardJson = null;
+
+  try {
+    active.clone(
+      (cloned: any) => {
+        clipboard = cloned;
+        console.info('[copySelection] cloned into clipboard', { type: cloned?.type, hasData: !!cloned?.data });
+      },
+      ['data', 'sbPathMeta']
+    );
+  } catch (e) {
+    console.error('[copySelection] failed to clone selection; will try JSON fallback', e);
+  }
+
+  if (!clipboard) {
+    try {
+      const payload = active.toJSON(['data', 'sbPathMeta']);
+      clipboardJson = JSON.stringify(payload);
+      console.info('[copySelection] stored clipboard JSON fallback', { type: payload?.type, hasData: !!payload?.data });
+    } catch (err) {
+      console.error('[copySelection] JSON fallback failed', err);
+      clipboardJson = null;
+    }
+  }
+}
+
+function pasteClipboard() {
+  if (!canvas) {
+    console.warn('[pasteClipboard] no canvas');
+    return;
+  }
+  if (!clipboard && !clipboardJson) {
+    console.warn('[pasteClipboard] clipboard empty');
+    return;
+  }
+
+  // Prefer live Fabric object if available
+  if (clipboard) {
+    console.info('[pasteClipboard] cloning from clipboard object', { type: clipboard?.type, hasData: !!clipboard?.data });
+    try {
+      clipboard.clone(
+        (clonedObj: any) => {
+          if (!clonedObj) {
+            console.warn('[pasteClipboard] clone returned null');
+            return;
+          }
+
+          console.info('[pasteClipboard] cloned object', { type: clonedObj.type, hasData: !!clonedObj.data });
+
+          canvas.discardActiveObject?.();
+
+          clonedObj.set({
+            left: (clonedObj.left || 0) + 20,
+            top: (clonedObj.top || 0) + 20,
+            evented: true,
+          });
+
+          if (clonedObj.type === 'activeSelection') {
+            clonedObj.canvas = canvas;
+            clonedObj.forEachObject((o: any) => {
+              canvas.add(o);
+            });
+            clonedObj.setCoords();
+            console.info('[pasteClipboard] added activeSelection children', { count: clonedObj._objects?.length });
+          } else {
+            canvas.add(clonedObj);
+            console.info('[pasteClipboard] added object to canvas', { type: clonedObj.type });
+          }
+
+          canvas.setActiveObject(clonedObj);
+          canvas.requestRenderAll();
+          pushHistorySnapshot('paste');
+        },
+        ['data', 'sbPathMeta']
+      );
+      return;
+    } catch (e) {
+      console.error('[pasteClipboard] failed to clone from clipboard object; will try JSON fallback', e);
+    }
+  }
+
+  // Fallback: revive from JSON
+  if (clipboardJson) {
+    console.info('[pasteClipboard] attempting enliven from JSON');
+    let payload: any = null;
+    try {
+      payload = JSON.parse(clipboardJson);
+    } catch (e) {
+      console.error('[pasteClipboard] failed to parse clipboard JSON', e);
+      return;
+    }
+
+    // Normalize basic types to lowercase for Fabric
+    if (payload && typeof payload.type === 'string') {
+      payload.type = payload.type.toLowerCase();
+    }
+
+    console.info('[pasteClipboard] payload', payload);
+
+    const addCloned = (clonedObj: any) => {
+      canvas.discardActiveObject?.();
+
+      clonedObj.set({
+        left: (clonedObj.left || 0) + 20,
+        top: (clonedObj.top || 0) + 20,
+        evented: true,
+      });
+
+      if (clonedObj.type === 'activeSelection') {
+        clonedObj.canvas = canvas;
+        clonedObj.forEachObject((o: any) => {
+          canvas.add(o);
+        });
+        clonedObj.setCoords();
+        console.info('[pasteClipboard] added activeSelection children', { count: clonedObj._objects?.length });
+      } else {
+        canvas.add(clonedObj);
+        console.info('[pasteClipboard] added object to canvas', { type: clonedObj.type });
+      }
+
+      canvas.setActiveObject(clonedObj);
+      canvas.requestRenderAll();
+      pushHistorySnapshot('paste');
+    };
+
+    const tryManualInstantiate = () => {
+      let obj: any = null;
+      const t = payload?.type;
+      const { type: _omitType, ...rest } = payload || {};
+      try {
+        switch (t) {
+          case 'circle': obj = new fabric.Circle(rest); break;
+          case 'rect': obj = new fabric.Rect(rest); break;
+          case 'ellipse': obj = new fabric.Ellipse(rest); break;
+          case 'triangle': obj = new fabric.Triangle(rest); break;
+          case 'line': obj = new fabric.Line(payload.points || [0, 0, payload.width || 0, payload.height || 0], rest); break;
+          case 'path': obj = new fabric.Path(payload.path || [], rest); break;
+          case 'polygon': obj = new fabric.Polygon(payload.points || [], rest); break;
+          case 'polyline': obj = new fabric.Polyline(payload.points || [], rest); break;
+          case 'textbox':
+          case 'i-text':
+          case 'text': obj = new fabric.Textbox(payload.text || '', rest); break;
+          default: break;
+        }
+      } catch (err) {
+        console.error('[pasteClipboard] manual instantiate failed', err);
+      }
+      if (obj) {
+        console.info('[pasteClipboard] manually instantiated object', { type: obj.type });
+        addCloned(obj);
+        return true;
+      }
+      return false;
+    };
+
+    try {
+      // Try manual first to bypass enliven issues
+      const manualOk = tryManualInstantiate();
+      if (manualOk) return;
+
+      const enliven = fabric.util?.enlivenObjects;
+      if (typeof enliven === 'function') {
+        enliven([payload], (objs: any[]) => {
+          const clonedObj = objs?.[0];
+          if (clonedObj) {
+            console.info('[pasteClipboard] enlivened object', { type: clonedObj.type, hasData: !!clonedObj.data });
+            addCloned(clonedObj);
+          } else {
+            console.warn('[pasteClipboard] enliven returned null', payload);
+            if (!tryManualInstantiate()) {
+              console.warn('[pasteClipboard] manual instantiate also failed', payload);
+            }
+          }
+        }, null, fabric);
+      } else {
+        console.warn('[pasteClipboard] enliven not available; manual fallback');
+        if (!tryManualInstantiate()) {
+          console.warn('[pasteClipboard] manual instantiate failed', payload);
+        }
+      }
+    } catch (e) {
+      console.error('[pasteClipboard] failed to enliven clipboard JSON', e);
+      if (!tryManualInstantiate()) {
+        console.warn('[pasteClipboard] manual instantiate failed after enliven error', payload);
+      }
+    }
+  }
 }
 
 

@@ -21,6 +21,8 @@
   >
     ⟳ Redo
   </button>
+    <button class="btn mx-2 my-1" @click="$emit('copy')">Copy</button>
+    <button class="btn mx-2 my-1" @click="$emit('paste')">Paste</button>
     <button class="btn mx-2 my-1" @click="$emit('add-text')">Text</button>
     <button class="btn mx-2 my-1" @click="$emit('add-curved-text')" title="Curved Text">
       Curved Text
@@ -90,6 +92,7 @@ const emit = defineEmits([
   'add-text','add-curved-text','add-rectangle','add-circle','upload-image','bring-to-front','send-to-back',
   'delete-selected','align-left','align-center','align-right','align-top','align-middle',
   'align-bottom','group','ungroup','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool','undo','redo'
+  ,'copy','paste'
 ])
 
 </script>
