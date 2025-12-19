@@ -21,13 +21,13 @@
             <input
               type="color"
               class="w-10 h-8 border rounded cursor-pointer"
-              :value="styleState.fill ?? '#000000'"
+              :value="fillColorInput"
               @input="onStyleChange({ fill: ($event.target as HTMLInputElement).value })"
             />
             <input
               type="text"
               class="w-24 p-1 text-xs border rounded"
-              :value="styleState.fill ?? ''"
+              :value="fillTextInput"
               placeholder="#000000"
               @change="onStyleChange({ fill: ($event.target as HTMLInputElement).value })"
             />
@@ -41,13 +41,13 @@
             <input
               type="color"
               class="w-10 h-8 border rounded cursor-pointer"
-              :value="styleState.stroke ?? '#000000'"
+              :value="strokeColorInput"
               @input="onStyleChange({ stroke: ($event.target as HTMLInputElement).value })"
             />
             <input
               type="text"
               class="w-24 p-1 text-xs border rounded"
-              :value="styleState.stroke ?? ''"
+              :value="strokeTextInput"
               placeholder="#000000"
               @change="onStyleChange({ stroke: ($event.target as HTMLInputElement).value })"
             />
@@ -511,6 +511,19 @@ const opacityPercent = computed(() => {
   const clamped = Math.max(0, Math.min(1, raw))
   return Math.round(clamped * 100)
 })
+
+const isHexColor = (value: any): value is string =>
+  typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
+
+const normalizeColorInput = (value: any, fallback = '#000000') =>
+  isHexColor(value) ? value : fallback
+
+const textColorInput = (value: any) => (typeof value === 'string' ? value : '')
+
+const fillColorInput = computed(() => normalizeColorInput(props.styleState.fill))
+const strokeColorInput = computed(() => normalizeColorInput(props.styleState.stroke))
+const fillTextInput = computed(() => textColorInput(props.styleState.fill))
+const strokeTextInput = computed(() => textColorInput(props.styleState.stroke))
 
 // --- Text-on-Path presets (move from DesignerToolsPanel.vue) ---
 /** Path presets */

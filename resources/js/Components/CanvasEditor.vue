@@ -1584,6 +1584,9 @@ function handlePropertiesStyleChange(update: any) {
       const anySel: any = obj;
       applyGradientToTextOnPathGroup(anySel, g);
       anySel.sbPathMeta = { ...(anySel.sbPathMeta || {}), fill: g };
+      if (anySel.data) {
+        anySel.data.options = { ...(anySel.data.options || {}), ...anySel.sbPathMeta };
+      }
       anySel.dirty = true;
     } else {
       const gradient = makePercentGradient(g.direction);
@@ -2843,6 +2846,14 @@ function copySelection() {
   clipboard = null;
   clipboardJson = null;
 
+  const anyActive: any = active;
+  if (isTextOnPathGroup(anyActive)) {
+    anyActive.sbPathMeta = anyActive.sbPathMeta || anyActive.data?.options || {};
+    if (anyActive.data) {
+      anyActive.data.options = { ...(anyActive.data.options || {}), ...anyActive.sbPathMeta };
+    }
+  }
+
   try {
     active.clone(
       (cloned: any) => {
@@ -2933,12 +2944,74 @@ function pasteClipboard() {
       return;
     }
 
-    // Normalize basic types to lowercase for Fabric
-    if (payload && typeof payload.type === 'string') {
-      payload.type = payload.type.toLowerCase();
-    }
+    const normalizeFabricType = (type: any) => {
+      if (typeof type !== 'string') return type;
+      const mapped: Record<string, string> = {
+        IText: 'i-text',
+        Textbox: 'textbox',
+        Text: 'text',
+        ActiveSelection: 'activeSelection',
+        Group: 'group',
+        Line: 'line',
+        Rect: 'rect',
+        Circle: 'circle',
+        Ellipse: 'ellipse',
+        Triangle: 'triangle',
+        Polygon: 'polygon',
+        Polyline: 'polyline',
+        Path: 'path',
+        Image: 'image'
+      };
+      if (mapped[type]) return mapped[type];
+      const lower = type.toLowerCase();
+      if (lower === 'itext') return 'i-text';
+      if (lower === 'activeselection') return 'activeSelection';
+      return lower;
+    };
+
+    const normalizeFabricTypesDeep = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (typeof obj.type === 'string') {
+        obj.type = normalizeFabricType(obj.type);
+      }
+      if (Array.isArray(obj.objects)) {
+        obj.objects.forEach(normalizeFabricTypesDeep);
+      }
+      if (Array.isArray(obj._objects)) {
+        obj._objects.forEach(normalizeFabricTypesDeep);
+      }
+    };
+
+    // Normalize type names to Fabric-friendly strings (including nested objects)
+    normalizeFabricTypesDeep(payload);
 
     console.info('[pasteClipboard] payload', payload);
+
+    const reviveGradient = (fill: any) => {
+      if (!fill || typeof fill !== 'object' || !Array.isArray(fill.colorStops)) return fill;
+      try {
+        return new fabric.Gradient(fill);
+      } catch {
+        return fill;
+      }
+    };
+
+    const reviveShadow = (shadow: any) => {
+      if (!shadow || typeof shadow !== 'object') return shadow;
+      if (shadow instanceof fabric.Shadow) return shadow;
+      try {
+        return new fabric.Shadow(shadow);
+      } catch {
+        return shadow;
+      }
+    };
+
+    const reviveStyleProps = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return obj;
+      if ('fill' in obj) obj.fill = reviveGradient(obj.fill);
+      if ('shadow' in obj) obj.shadow = reviveShadow(obj.shadow);
+      return obj;
+    };
 
     const addCloned = (clonedObj: any) => {
       canvas.discardActiveObject?.();
@@ -2948,6 +3021,14 @@ function pasteClipboard() {
         top: (clonedObj.top || 0) + 20,
         evented: true,
       });
+
+      if (isTextOnPathGroup(clonedObj)) {
+        clonedObj.sbPathMeta = clonedObj.sbPathMeta || clonedObj.data?.options || {};
+        if (clonedObj.sbPathMeta?.fill && Array.isArray(clonedObj.sbPathMeta.fill.colorStops)) {
+          applyGradientToTextOnPathGroup(clonedObj, clonedObj.sbPathMeta.fill);
+        }
+        rehydrateTextOnPath(clonedObj);
+      }
 
       if (clonedObj.type === 'activeSelection') {
         clonedObj.canvas = canvas;
@@ -2970,6 +3051,7 @@ function pasteClipboard() {
       let obj: any = null;
       const t = payload?.type;
       const { type: _omitType, ...rest } = payload || {};
+      reviveStyleProps(rest);
       try {
         switch (t) {
           case 'circle': obj = new fabric.Circle(rest); break;
@@ -2980,9 +3062,32 @@ function pasteClipboard() {
           case 'path': obj = new fabric.Path(payload.path || [], rest); break;
           case 'polygon': obj = new fabric.Polygon(payload.points || [], rest); break;
           case 'polyline': obj = new fabric.Polyline(payload.points || [], rest); break;
-          case 'textbox':
+          case 'textbox': obj = new fabric.Textbox(payload.text || '', rest); break;
           case 'i-text':
-          case 'text': obj = new fabric.Textbox(payload.text || '', rest); break;
+            obj = fabric.IText ? new fabric.IText(payload.text || '', rest) : new fabric.Textbox(payload.text || '', rest);
+            break;
+          case 'text': obj = new fabric.Text(payload.text || '', rest); break;
+          case 'group':
+            if (payload?.data?.kind === 'text-on-path' && payload?.data?.options) {
+              obj = createTextOnPath(payload.data.options);
+              obj.set({
+                left: payload.left,
+                top: payload.top,
+                angle: payload.angle,
+                scaleX: payload.scaleX,
+                scaleY: payload.scaleY,
+                skewX: payload.skewX,
+                skewY: payload.skewY,
+                flipX: payload.flipX,
+                flipY: payload.flipY,
+                opacity: payload.opacity
+              });
+              const shadowSource = payload.shadow ?? payload?.data?.options?.shadow;
+              if (shadowSource) {
+                obj.set('shadow', reviveShadow(shadowSource));
+              }
+            }
+            break;
           default: break;
         }
       } catch (err) {

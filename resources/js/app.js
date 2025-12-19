@@ -2,7 +2,7 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
-import router from '@/router'; // Router/index.js
+import router from '@/Router'; // Router/index.js
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 
 createInertiaApp({
@@ -12,7 +12,7 @@ createInertiaApp({
   setup({ el, App, props, plugin }) {
     createApp({ render: () => h(App, props) })
       .use(plugin)
-      .use(router) 
+      .use(router)
       .use(ZiggyVue)
       .mount(el);
   },
