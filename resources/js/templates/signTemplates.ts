@@ -7,7 +7,7 @@ export const signTemplates = {
   "Wall Sign Illuminated": {
     template: "wall_illum",
     illuminated: true,
-    sku: "WALLILUM",
+    code: "WALL_ILUM",
     face: {
       width: 71,
       height: 35,
@@ -30,19 +30,15 @@ export const signTemplates = {
       type: "led",
       length: 72,
       uom: "inches",
-      structure: "strand",
+      structure: "led",
       count: 2,
     },
-    post: {
-      height: 3,
-      mount: "bottom",
-      color: "#ffffff",
-    },
+    post: null,
   },
   "Wall Sign Exterior": {
     template: "wall_ext",
     illuminated: false,
-    sku: "WALLEXT",
+    code: "WALL_EXT",
     face: {
       width: 72,
       height: 36,
@@ -56,9 +52,9 @@ export const signTemplates = {
     post: null,
   },
   "Wall Sign Interior": {
-    template: "wall_int",
+    template: "WALL_INT",
     illuminated: false,
-    sku: "WALLINT",
+    code: "WALL_INT",
     face: {
       width: 72,
       height: 36,
@@ -74,15 +70,15 @@ export const signTemplates = {
   "Pylon Illuminated Cabinet": {
     template: "pylon_illum",
     illuminated: true,
-    sku:"PYL-IL",
+    code:"PYL_ILUM",
     face: {
-      width: 96,
-      height: 48,
+      width: 71,
+      height: 47,
       shape: "flat",
       materialOptions: material.Application.illum,
     },
     cabinet: {
-      width: 96,
+      width: 72,
       height: 48,
       depth: 8,
       borderWidthInches: 1,
@@ -91,13 +87,14 @@ export const signTemplates = {
     },
     lighting: {
       type: "led",
-      length: 96,
+      length: 48,
       uom: "inches",
       structure: "strand",
       count: 3,
     },
     post: {
-      height: 10,
+      height: 12,
+      uom: "feet",
       mount: "bottom",
       color: "#ffffff",
     },
@@ -106,16 +103,16 @@ export const signTemplates = {
   "Pylon Non-Illuminated": {
     template: "pylon",
     illuminated: false,
-    sku:"PYL",
+    code:"PYL",
     face: {
-      width: 96,
-      height: 48,
+      width: 71,
+      height: 47,
       shape: "flat",
       materialOptions: material.Application.ext_printed,
     },
     cabinet: {
-      width: 96,
-      height: 48,
+      width: 72,
+      height: 47,
       depth: 8,
       mount: "post",
       borderWidthInches: 1,
@@ -125,6 +122,7 @@ export const signTemplates = {
     lighting: null,
     post: {
       height: 120,
+      uom: "feet",
       mount: "bottom",
       color: "#ffffff",
     },
@@ -133,10 +131,10 @@ export const signTemplates = {
   "Monument Illuminated": {
     template: "monument_illum",
     illuminated: true,
-    sku:"MON-IL",
+    code:"MON_ILUM",
     face: {
-      width: 72,
-      height: 36,
+      width: 71,
+      height: 35,
       shape: "flat",
       materialOptions: material.Application.illum,
     },
@@ -156,7 +154,8 @@ export const signTemplates = {
       count: 2,
     },
     post: {
-      height: 3,
+      height: 5,
+      uom: "feet",
       mount: "bottom",
       color: "#ffffff",
     },
@@ -164,7 +163,7 @@ export const signTemplates = {
   "Monument": {
     template: "monument",
     illuminated: false,
-    sku:"MON",
+    code:"MON",
     face: {
       width: 72,
       height: 36,
@@ -189,10 +188,10 @@ export const signTemplates = {
   "Channel Letters": {
     template: "channel_letters",
     illuminated: true,
-     sku: "CHNLTR",
+     code: "CHN_LTR",
     face: {
       width: 72,
-      height: 36,
+      height: 24,
       shape: "flat",
       materialOptions: material.Application.illum,
     },
@@ -216,7 +215,7 @@ export const signTemplates = {
   "Cut Letters Interior": {
     template: "cut_ltrs",
     illuminated: false,
-    sku: "CUTLTRINT",
+    code: "CUT_LTR_INT",
     face: {
       width: 72,
       height: 36,
@@ -230,7 +229,7 @@ export const signTemplates = {
   "Cut Letters Exterior": {
     template: "cut_ltrs",
     illuminated: false,
-    sku: "CUTLTREXT",
+    code: "CUT_LTR_EXT",
     face: {
       width: 72,
       height: 36,
@@ -244,6 +243,7 @@ export const signTemplates = {
   "Face Replacement": {
     template: "face_replacement",
     illuminated: false,
+    code: "FR",
     face: {
       width: 72,
       height: 36,
@@ -257,6 +257,7 @@ export const signTemplates = {
   "Face Replacement Illuminated": {
     template: "face_replacement",
     illuminated: true,
+    code: "FR_ILUM",
     face: {
       width: 72,
       height: 36,

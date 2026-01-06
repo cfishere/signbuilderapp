@@ -23,7 +23,17 @@
           <section class="border rounded-xl p-4 shadow-sm">
             <div class="flex items-center justify-center mb-4">
               <!-- If you already compute a thumbnail, keep using it; otherwise swap this binding -->
-              <img :src="thumbnailSrc" alt="Sign type thumbnail" class="h-20 object-contain" />
+              <button
+                type="button"
+                class="relative group focus:outline-none"
+                aria-label="Open full size sign preview"
+                @click="openFullSize"
+              >
+                <img :src="thumbnailSrc" alt="Sign type thumbnail" class="h-20 object-contain" />
+                <span class="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                  Click to enlarge
+                </span>
+              </button>
             </div>
 
                <!-- Settings panel -->
@@ -52,6 +62,7 @@
       <input
         type="number"
         min="1"
+        :max="maxHeightIn ?? undefined"
         step="0.25"
         v-model.number="formHeightIn"
         :disabled="!editingDims"
@@ -61,6 +72,7 @@
       <input
         type="number"
         min="1"
+        :max="maxWidthIn ?? undefined"
         step="0.25"
         v-model.number="formWidthIn"
         :disabled="!editingDims"
@@ -171,6 +183,15 @@
             <span v-if="!isSaving">Save Design</span>
             <span v-else>Saving…</span>
           </button>
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-60"
+            :disabled="isOrdering || isSaving"
+            @click="orderSign"
+          >
+            <span v-if="!isOrdering">Order Sign</span>
+            <span v-else>Preparing...</span>
+          </button>
         </div>
 
           <!-- Auth / Designs panel always visible -->
@@ -195,6 +216,7 @@
   <!-- TOOLBAR: directly beneath canvas, horizontal -->
   <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2 sticky md:static bottom-3 z-10">
     <DesignerToolsPanel  
+      ref="toolsPanel"
       :snapToGrid="snapToGrid"
       :hasSelection="hasSelection"  
       :gridVisible="gridVisible"
@@ -264,6 +286,31 @@
 </section>
 </div>
     </main>
+
+    <div
+      v-if="showFullSize"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Sign template preview"
+      @click.self="closeFullSize"
+    >
+      <div class="relative max-w-[400px] max-h-[400px] w-full">
+        <button
+          type="button"
+          class="absolute -top-3 -right-3 h-8 w-8 rounded-full bg-white text-gray-700 shadow"
+          aria-label="Close preview"
+          @click="closeFullSize"
+        >
+          X
+        </button>
+        <img
+          :src="fullSizeSrc"
+          alt="Sign template preview"
+          class="w-full h-auto max-h-[400px] object-contain rounded bg-white"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -348,7 +395,19 @@ const availableFonts = computed(() => {
 })
 /*let widthIn  = ref<number>(48)
 const heightIn = ref<number>(24)*/
-const signType = ref<string>(Object.keys(signTemplates)[0] ?? 'wall_cabinet')
+const signType = ref<string>('')
+const selectedTemplate = computed(() => signTemplates[signType.value] ?? null)
+const selectedFace = computed(() => selectedTemplate.value?.face ?? null)
+const selectedCabinet = computed(() => selectedTemplate.value?.cabinet ?? null)
+const hasCabinet = computed(() => !!selectedCabinet.value)
+const maxWidthIn = computed<number | null>(() => {
+  const max = selectedFace.value?.maxW
+  return Number.isFinite(max) ? Number(max) : null
+})
+const maxHeightIn = computed<number | null>(() => {
+  const max = selectedFace.value?.maxH
+  return Number.isFinite(max) ? Number(max) : null
+})
 
 /** pixels per logical inch (base density; zoom handles fitting) */
 const ppi = ref(12)              // 1 inch = 12 px (design scale)
@@ -397,6 +456,10 @@ const dimError = ref('')
 const gridEnabled = ref(true);       // or from your existing state
 const gridSize = ref(24);            // 24px squares
 const backgroundColor = ref('#ffffff');
+const showFullSize = ref(false)
+const FACE_RETAINER_IN = 0.5
+let faceRetainerGroup: fabric.Group | null = null
+let canvas: fabric.Canvas | null = null;
 
 const history = ref<any[]>([]);
 const historyIndex = ref(-1);
@@ -416,7 +479,7 @@ let activeLine: fabric.Line | null = null
 let lineStart = { x: 0, y: 0 }
 
 /*const template = signTemplates[props.signType];*/
-const fileInput = ref(null)
+const toolsPanel = ref<{ openFileDialog?: () => void } | null>(null)
 
 const snapToGrid = ref(false)
 const selectedObject = reactive({})
@@ -445,10 +508,22 @@ let clipboard: any = null
 let clipboardJson: string | null = null
 
 const keyHandler = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && showFullSize.value) {
+    e.preventDefault();
+    closeFullSize();
+    return;
+  }
   const target = e.target as HTMLElement | null;
   const tag = target?.tagName?.toLowerCase();
   const isInput = tag === 'input' || tag === 'textarea' || target?.isContentEditable;
   if (isInput) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (canvas?.getActiveObject?.()) {
+      e.preventDefault();
+      deleteSelected();
+    }
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === 'c') {
     e.preventDefault();
     copySelection();
@@ -510,15 +585,27 @@ let isPointerDown = false;
 let pendingCurvedReflow = null;
 
 /** optional: thumbnail from templates */
-const thumbnailSrc = computed(() =>
-  signTemplates[signType.value]?.thumbnail ?? 'img/sign-type/placeholder.png'
-)
+function resolveThumbnailSrc(templateKey: string) {
+  const tpl = signTemplates[templateKey]
+  const code = tpl?.code ?? tpl?.sku ?? tpl?.template
+  if (!code) return 'img/sign-type/placeholder.png'
+  return `img/sign-type/${code}_tn.jpg`
+}
+function resolveFullSizeSrc(templateKey: string) {
+  const tpl = signTemplates[templateKey]
+  const code = tpl?.code ?? tpl?.sku ?? tpl?.template
+  if (!code) return 'img/sign-type/placeholder.png'
+  return `img/sign-type/${code}.jpg`
+}
+const thumbnailSrc = computed(() => resolveThumbnailSrc(signType.value))
+const fullSizeSrc = computed(() => resolveFullSizeSrc(signType.value))
 
 // Name for the design
 const designName = ref('My Sign Design');
 const currentDesignId = ref(null);
 // Saving state
 const isSaving = ref(false);
+const isOrdering = ref(false);
 // Simple computed to prevent saving with no canvas or name
 const canSave = computed(() => {
   return !!fabricCanvas.value && !!designName.value.trim();
@@ -533,6 +620,14 @@ function showToast(message, type = 'success') {
     console.error(message);
   }
   window.alert(message);
+}
+
+function openFullSize() {
+  showFullSize.value = true
+}
+
+function closeFullSize() {
+  showFullSize.value = false
 }
 
 // Track canvas snapshot history, for undo, redo actions:
@@ -693,7 +788,39 @@ function onHeightInput(e: Event) {
 }
 
 const signTypeOptions = computed(() =>
-  Object.keys(signTemplates).map(k => ({ value: k, label: signTemplates[k]?.label ?? k }))
+  [
+    { value: '', label: '-- Choose Sign Type --' },
+    ...Object.keys(signTemplates).map(k => ({ value: k, label: signTemplates[k]?.label ?? k }))
+  ]
+)
+
+function applyTemplateDefaults(templateKey: string) {
+  if (!templateKey) return
+  const face = signTemplates[templateKey]?.face
+  const cabinet = signTemplates[templateKey]?.cabinet
+  if (!face && !cabinet) return
+
+  const width = Number(cabinet?.width ?? face?.width)
+  const height = Number(cabinet?.height ?? face?.height)
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return
+
+  formWidthIn.value = width
+  formHeightIn.value = height
+  dimError.value = ''
+
+  if (canvas) {
+    resizeCanvasNoScale(width, height, 'top-left')
+    refreshGrid()
+    updateFaceRetainer()
+  }
+}
+
+watch(
+  signType,
+  (next) => {
+    applyTemplateDefaults(next)
+  },
+  { immediate: true }
 )
 
 // Simple inline “units” helper text
@@ -828,7 +955,6 @@ const canvasRef = ref(null);     // <canvas ref="canvasRef">
 const wrapRef = ref(null);       // wrapper <div ref="wrapRef">
 
 /*let gridGroup: fabric.Group | null = null*/
-let canvas: fabric.Canvas | null = null;
 let gridGroup: fabric.Object | null = null;
 function hydrateStyleFromObject(obj: any | null) {
   
@@ -970,7 +1096,11 @@ onMounted(async () => {
 
   // 3) Apply your inches→pixels size (backing size again), then normalize
   //    ⚠️ Ensure setCanvasSizeFromInches internally uses canvas.setDimensions({cssOnly:false})
-  setCanvasSizeFromInches(props.initialWidthIn, props.initialHeightIn)
+  if (!props.designId) {
+    applyTemplateDefaults(signType.value)
+  } else {
+    setCanvasSizeFromInches(props.initialWidthIn, props.initialHeightIn)
+  }
   canvas.calcOffset()
   canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
   canvas.setZoom(1)
@@ -1032,6 +1162,9 @@ canvas.on('selection:cleared', () => {
     const target: any = e.target;
     if (!target) return;
     if (target.isGrid) return; // don't track grid-only changes
+    if (target.isFaceRetainer) return;
+
+    ensureObjectBelowFaceRetainer(target)
 
     /*object:added was duplicating the pushHistory snapshots that 
     addCircle, etc, were calling:
@@ -1043,6 +1176,8 @@ canvas.on('selection:cleared', () => {
   const target: any = e.target;
   if (!target) return;
   if (target.isGrid) return;
+  if (target.isFaceRetainer) return;
+  ensureObjectBelowFaceRetainer(target)
   pushHistorySnapshot('object:modified');
 });
 
@@ -1212,8 +1347,17 @@ function saveDimensions () {
     dimError.value = 'Please enter valid positive numbers for width and height.'
     return
   }
+  if (maxWidthIn.value != null && wIn > maxWidthIn.value) {
+    dimError.value = `Width cannot exceed ${maxWidthIn.value}" for this sign type.`
+    return
+  }
+  if (maxHeightIn.value != null && hIn > maxHeightIn.value) {
+    dimError.value = `Height cannot exceed ${maxHeightIn.value}" for this sign type.`
+    return
+  }
 
   resizeCanvasNoScale(wIn, hIn, 'top-left') // or 'center'
+  updateFaceRetainer()
   editingDims.value = false
 }
 
@@ -1245,6 +1389,128 @@ function setCanvasSizeFromInches (widthIn, heightIn) {
   // if you draw a grid/rulers, refresh them here:
   // instance.proxy?.refreshGrid?.()
   canvas.requestRenderAll()
+}
+
+function clearFaceRetainer() {
+  if (!canvas || !faceRetainerGroup) return
+  canvas.remove(faceRetainerGroup)
+  faceRetainerGroup = null
+}
+
+function bringFaceRetainerToFront() {
+  if (!canvas || !faceRetainerGroup) return
+  if (typeof faceRetainerGroup.bringToFront === 'function') {
+    faceRetainerGroup.bringToFront()
+    canvas.requestRenderAll()
+    return
+  }
+  if (typeof (canvas as any).bringToFront === 'function') {
+    ;(canvas as any).bringToFront(faceRetainerGroup)
+    canvas.requestRenderAll()
+    return
+  }
+  if (typeof (canvas as any).moveTo === 'function') {
+    const top = ((canvas as any)._objects?.length ?? 1) - 1
+    ;(canvas as any).moveTo(faceRetainerGroup, top)
+    canvas.requestRenderAll()
+  }
+}
+
+function ensureObjectBelowFaceRetainer(obj: any) {
+  if (!canvas || !faceRetainerGroup || !obj || obj === faceRetainerGroup) return
+  const arr = (canvas as any)._objects
+  if (!Array.isArray(arr)) return
+
+  let retainerIndex = arr.indexOf(faceRetainerGroup)
+  if (retainerIndex < 0) {
+    bringFaceRetainerToFront()
+    retainerIndex = arr.indexOf(faceRetainerGroup)
+  }
+  if (retainerIndex < 0) return
+
+  const objIndex = arr.indexOf(obj)
+  const gridIndex = gridGroup && Array.isArray(arr) ? arr.indexOf(gridGroup) : -1
+  const minIndex = gridIndex >= 0 ? gridIndex + 1 : 0
+  const targetIndex = Math.max(minIndex, retainerIndex - 1)
+  if (objIndex > targetIndex) {
+    if (typeof obj.moveTo === 'function') {
+      obj.moveTo(targetIndex)
+    } else {
+      arr.splice(objIndex, 1)
+      arr.splice(targetIndex, 0, obj)
+    }
+  }
+
+  bringFaceRetainerToFront()
+}
+
+function updateFaceRetainer() {
+  if (!canvas) return
+  clearFaceRetainer()
+
+  if (!hasCabinet.value) return
+
+  const retainerPx = Math.max(1, Math.round(FACE_RETAINER_IN * ppi.value))
+  const w = canvas.getWidth()
+  const h = canvas.getHeight()
+  if (retainerPx * 2 >= w || retainerPx * 2 >= h) return
+
+  const fill = '#d1d5db'
+  const stroke = '#9ca3af'
+  const common = {
+    fill,
+    stroke,
+    strokeWidth: 1,
+    selectable: false,
+    evented: false,
+    hasControls: false,
+    hasBorders: false,
+    excludeFromExport: true,
+  }
+
+  const top = new fabric.Rect({
+    left: 0,
+    top: 0,
+    width: w,
+    height: retainerPx,
+    ...common,
+  })
+  const bottom = new fabric.Rect({
+    left: 0,
+    top: h - retainerPx,
+    width: w,
+    height: retainerPx,
+    ...common,
+  })
+  const left = new fabric.Rect({
+    left: 0,
+    top: retainerPx,
+    width: retainerPx,
+    height: h - retainerPx * 2,
+    ...common,
+  })
+  const right = new fabric.Rect({
+    left: w - retainerPx,
+    top: retainerPx,
+    width: retainerPx,
+    height: h - retainerPx * 2,
+    ...common,
+  })
+
+  faceRetainerGroup = new fabric.Group([top, bottom, left, right], {
+    selectable: false,
+    evented: false,
+    excludeFromExport: true,
+    hasControls: false,
+    hasBorders: false,
+    lockMovementX: true,
+    lockMovementY: true,
+    name: 'face-retainer',
+    isFaceRetainer: true,
+  } as any)
+
+  canvas.add(faceRetainerGroup)
+  bringFaceRetainerToFront()
 }
 
 // === Helpers ===
@@ -1903,6 +2169,9 @@ function refreshGrid() {
 
   canvas.add(gridGroup);
   sendObjectToBackSafe(canvas, gridGroup);
+  if (faceRetainerGroup) {
+    bringFaceRetainerToFront()
+  }
   canvas.requestRenderAll();
 
   console.log(
@@ -1947,14 +2216,20 @@ function bottomIndexAboveGrid(): number {
 
 function moveToFrontSafe(obj: any, maxIndex?: number) {
   if (!canvas || !obj) return
-  if (typeof obj.bringToFront === 'function') { obj.bringToFront(); return canvas.requestRenderAll() }
+  const arr = (canvas as any)._objects;
+  const retainerIndex = faceRetainerGroup && Array.isArray(arr) ? arr.indexOf(faceRetainerGroup) : -1
+  const topDefault = maxIndex ?? (Array.isArray(arr) ? arr.length - 1 : 0)
+  const top = retainerIndex >= 0 ? Math.max(0, Math.min(topDefault, retainerIndex - 1)) : topDefault
+
   if (typeof obj.moveTo === 'function') {
-    const top = maxIndex ?? ((canvas as any)._objects?.length ?? 1) - 1
     obj.moveTo(top); return canvas.requestRenderAll()
   }
-  const arr = (canvas as any)._objects; if (!Array.isArray(arr)) return
+  if (typeof obj.bringToFront === 'function' && retainerIndex < 0) {
+    obj.bringToFront(); return canvas.requestRenderAll()
+  }
+  if (!Array.isArray(arr)) return
   const i = arr.indexOf(obj); if (i < 0) return
-  arr.splice(i, 1); arr.push(obj); 
+  arr.splice(i, 1); arr.splice(top, 0, obj);
   canvas.requestRenderAll();
   pushHistorySnapshot('zOrderChange');
 }
@@ -2370,23 +2645,50 @@ function normalizeTextStyleUpdate(u) {
 
 
 function uploadImage() {
-  fileInput.value.click();
+  if (toolsPanel.value?.openFileDialog) {
+    toolsPanel.value.openFileDialog()
+  } else {
+    console.warn('[uploadImage] file dialog not ready');
+  }
 }
 
 function handleFileUpload(e) {
-  const file = e.target.files[0];
+  const input = e?.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = function (f) {
-    fabric.Image.fromURL(f.target.result, function (img) {
+    const result = f.target?.result as string | null;
+    if (!result) return;
+
+    const addImage = (img: any) => {
+      if (!canvas || !img) return;
       img.set({ left: 100, top: 100, scaleX: 0.5, scaleY: 0.5 });
       canvas.add(img);
       canvas.setActiveObject(img);
       canvas.requestRenderAll();
-    });
+    };
+
+    const major = Number(String(fabric.version || '0').split('.')[0]);
+    if (major >= 6) {
+      const maybePromise = fabric.Image.fromURL(result, { crossOrigin: 'anonymous' });
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(addImage).catch((err: any) => {
+          console.error('[handleFileUpload] image load failed', err);
+        });
+      }
+    } else {
+      fabric.Image.fromURL(result, function (img) {
+        addImage(img);
+      });
+    }
   };
   reader.readAsDataURL(file);
+
+  if (input) {
+    input.value = '';
+  }
 }
 
 /*let obj;*/
@@ -2403,6 +2705,9 @@ function bringToFront() {
   if (!targets.length) return alert('Select The Sign Element First')
   // If you also keep a faceRect overlay etc., you can set maxIndex just below it.
   targets.forEach(o => moveToFrontSafe(o))
+  if (faceRetainerGroup) {
+    bringFaceRetainerToFront()
+  }
 }
 
 
@@ -2626,7 +2931,7 @@ async function saveDesign() {
       name: designName.value || null,
       slug: null,
 
-      sign_type: props.signType || 'wall_sign_cabinet',
+      sign_type: signType.value || props.signType || 'wall_sign_cabinet',
       sign_category: props.signCategory || null,
 
       // inches
@@ -2668,11 +2973,83 @@ async function saveDesign() {
     }
 
     showToast(isUpdate ? 'Design updated successfully.' : 'Design saved successfully.');
+    return design;
   } catch (err) {
     console.error('[saveDesign] Error:', err);
-    showToast('Failed to save design. Please try again.', error);
+    showToast('Failed to save design. Please try again.', 'error');
+    return null;
   } finally {
     isSaving.value = false;
+  }
+}
+
+function captureOrderPreviewJpeg() {
+  const c = fabricCanvas.value;
+  if (!c) return null;
+  return c.toDataURL({
+    format: 'jpeg',
+    quality: 0.9,
+    multiplier: 1,
+  });
+}
+
+async function orderSign() {
+  if (isOrdering.value) return;
+
+  if (!signType.value) {
+    showToast('Please choose a sign type before ordering.', 'error');
+    return;
+  }
+
+  if (!fabricCanvas.value) {
+    showToast('Canvas is not ready yet.', 'error');
+    return;
+  }
+
+  isOrdering.value = true;
+
+  try {
+    if (!currentDesignId.value) {
+      const saved = await saveDesign();
+      if (!saved?.id) {
+        showToast('Please save the design before ordering.', 'error');
+        return;
+      }
+    } else {
+      await saveDesign();
+    }
+
+    const designId = currentDesignId.value ?? props.designId;
+    if (!designId) {
+      showToast('Missing design ID for this order.', 'error');
+      return;
+    }
+
+    const preview = captureOrderPreviewJpeg();
+    if (!preview) {
+      showToast('Unable to capture a preview image.', 'error');
+      return;
+    }
+
+    const { data: order } = await axios.post('/api/orders', {
+      status: 'draft',
+      design_id: designId,
+      preview_image_data: preview,
+      metadata: {
+        sign_type: signType.value,
+      },
+    });
+
+    if (order?.id) {
+      window.location.href = `/orders/${order.id}`;
+    } else {
+      showToast('Order created, but no order ID was returned.', 'error');
+    }
+  } catch (err) {
+    console.error('[orderSign] Error:', err);
+    showToast('Unable to start the order. Please try again.', 'error');
+  } finally {
+    isOrdering.value = false;
   }
 }
 
