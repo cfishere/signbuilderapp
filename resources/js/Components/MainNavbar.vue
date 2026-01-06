@@ -1,10 +1,10 @@
 <template>
   <header class="border-b bg-white/80 backdrop-blur">
-    <nav class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+    <nav class="flex items-center justify-between px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
       <!-- Left: Brand / Home -->
       <div class="flex items-center gap-3">
         <Link href="/" class="flex items-center gap-2">
-          <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
+          <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-bold text-white rounded-lg bg-emerald-600">
             SB
           </span>
           <span class="text-base font-semibold text-gray-800">
@@ -13,7 +13,7 @@
         </Link>
 
         <!-- Optional: primary nav links -->
-        <div class="hidden md:flex items-center gap-4 ml-6 text-sm">
+        <div class="items-center hidden gap-4 ml-6 text-sm md:flex">
           <Link
             href="/canvas"
             class="text-gray-600 hover:text-gray-900"
@@ -21,7 +21,7 @@
             Canvas
           </Link>
           <Link
-            href="{{ route('designs.index') }}"
+            href="/designs"
             class="text-gray-600 hover:text-gray-900"
             v-if="authUser"
           >
@@ -34,7 +34,7 @@
       <div class="flex items-center gap-3 text-sm">
         <!-- When authenticated -->
         <template v-if="authUser">
-          <span class="hidden sm:inline text-gray-700">
+          <span class="hidden text-gray-700 sm:inline">
             Welcome, <span class="font-semibold">{{ authUser.name }}</span>
           </span>
 

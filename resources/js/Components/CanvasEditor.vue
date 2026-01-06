@@ -329,6 +329,7 @@ import { fabric } from '@/utils/fabricRef';
 import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
 import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
 import { applyFontFamily } from '@/utils/applyFontFamily'
+import { getBasePriceForSignType } from '@/utils/pricing'
 
 // Guard Fabric toObject/clone against non-iterable additionalProps
 function guardToObject(proto: any) {
@@ -3034,6 +3035,8 @@ async function orderSign() {
     const { data: order } = await axios.post('/api/orders', {
       status: 'draft',
       design_id: designId,
+      total_amount: getBasePriceForSignType(signType.value),
+      currency: 'USD',
       preview_image_data: preview,
       metadata: {
         sign_type: signType.value,
