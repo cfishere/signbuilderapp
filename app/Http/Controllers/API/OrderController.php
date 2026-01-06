@@ -32,7 +32,9 @@ class OrderController extends Controller
 
         $validated = $request->validate([
             'order_number' => 'nullable|string|max:255',
-            'status' => 'nullable|string|in:draft,submitted,in_production,completed,canceled',
+            'status' => 'nullable|string|in:draft,submitted,paid,in_production,completed,canceled',
+            'total_amount' => 'nullable|numeric|min:0',
+            'currency' => 'nullable|string|size:3',
             'customer_name' => 'nullable|string|max:255',
             'address_line1' => 'nullable|string|max:255',
             'address_line2' => 'nullable|string|max:255',
@@ -53,6 +55,8 @@ class OrderController extends Controller
         $order = Auth::user()->orders()->create([
             'order_number' => $validated['order_number'] ?? null,
             'status' => $validated['status'],
+            'total_amount' => $validated['total_amount'] ?? null,
+            'currency' => $validated['currency'] ?? 'USD',
             'customer_name' => $validated['customer_name'] ?? '',
             'address_line1' => $validated['address_line1'] ?? '',
             'address_line2' => $validated['address_line2'] ?? null,
@@ -97,7 +101,9 @@ class OrderController extends Controller
 
         $validated = $request->validate([
             'order_number' => 'sometimes|nullable|string|max:255',
-            'status' => 'sometimes|string|in:draft,submitted,in_production,completed,canceled',
+            'status' => 'sometimes|string|in:draft,submitted,paid,in_production,completed,canceled',
+            'total_amount' => 'sometimes|nullable|numeric|min:0',
+            'currency' => 'sometimes|nullable|string|size:3',
             'customer_name' => 'sometimes|nullable|string|max:255',
             'address_line1' => 'sometimes|nullable|string|max:255',
             'address_line2' => 'sometimes|nullable|string|max:255',

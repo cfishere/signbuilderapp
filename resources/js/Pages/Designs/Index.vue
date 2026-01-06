@@ -1,12 +1,52 @@
 <script setup lang="ts">
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import axios from 'axios';
 
 const page = usePage();
 
 // Inertia paginated data
 const designs = computed(() => page.props.designs);
+const openMenuId = ref<number | null>(null);
+const isDeleting = ref<number | null>(null);
+
+function toggleMenu(id: number) {
+  openMenuId.value = openMenuId.value === id ? null : id;
+}
+
+function handleClickAway(event: MouseEvent) {
+  if (!openMenuId.value) return;
+  const target = event.target as HTMLElement | null;
+  if (!target) return;
+  if (target.closest('[data-actions-menu="true"]')) return;
+  openMenuId.value = null;
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickAway);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickAway);
+});
+
+async function deleteDesign(id: number) {
+  const confirmed = window.confirm('Delete this design? This cannot be undone.');
+  if (!confirmed) return;
+
+  isDeleting.value = id;
+  try {
+    await axios.delete(`/api/designs/${id}`);
+    window.location.reload();
+  } catch (err) {
+    console.error('[deleteDesign] Failed:', err);
+    window.alert('Unable to delete this design. Please try again.');
+  } finally {
+    isDeleting.value = null;
+    openMenuId.value = null;
+  }
+}
 </script>
 
 <template>
@@ -65,12 +105,35 @@ const designs = computed(() => page.props.designs);
                 {{ design.updated_at || '—' }}
               </td>
               <td class="px-3 py-2 text-right">
-                <Link
-                  :href="`/canvas?design_id=${design.id}`"
-                  class="inline-flex items-center rounded-md border border-emerald-600 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-                >
-                  Open in Canvas
-                </Link>
+                <div class="relative inline-block text-left" data-actions-menu="true">
+                  <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded border text-gray-600 hover:bg-gray-50"
+                    @click="toggleMenu(design.id)"
+                    aria-label="Open actions menu"
+                  >
+                    ⋮
+                  </button>
+                  <div
+                    v-if="openMenuId === design.id"
+                    class="absolute right-0 z-10 mt-2 w-36 origin-top-right rounded-md border bg-white shadow"
+                  >
+                    <Link
+                      :href="`/canvas?design_id=${design.id}`"
+                      class="block px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      View/Update
+                    </Link>
+                    <button
+                      type="button"
+                      class="block w-full px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      :disabled="isDeleting === design.id"
+                      @click="deleteDesign(design.id)"
+                    >
+                      {{ isDeleting === design.id ? 'Deleting...' : 'Delete' }}
+                    </button>
+                  </div>
+                </div>
               </td>
             </tr>
           </tbody>

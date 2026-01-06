@@ -4,6 +4,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\DashboardController; //recommended to add per chatgtp.  Controller also created.
 use App\Http\Controllers\API\DesignController;
 use App\Http\Controllers\API\OrderController;
+use App\Http\Controllers\API\PayPalController;
 use App\Http\Controllers\DesignIndexController;
 use App\Http\Controllers\OrderIndexController;
 use App\Http\Controllers\OrderShowController;
@@ -39,9 +40,12 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.api.index');
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
-    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.api.show');
     Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
     Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
+
+    Route::post('/orders/{order}/paypal/create', [PayPalController::class, 'create'])->name('orders.paypal.create');
+    Route::post('/orders/{order}/paypal/capture', [PayPalController::class, 'capture'])->name('orders.paypal.capture');
 });
 
 //AUTH ROUTES
