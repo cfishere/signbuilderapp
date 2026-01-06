@@ -3,7 +3,10 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\DashboardController; //recommended to add per chatgtp.  Controller also created.
 use App\Http\Controllers\API\DesignController;
+use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\DesignIndexController;
+use App\Http\Controllers\OrderIndexController;
+use App\Http\Controllers\OrderShowController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +27,8 @@ Route::get('/canvas', function (Request $request) {
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/designs', [DesignIndexController::class, 'index'])->name('designs.index');
+    Route::get('/orders', [OrderIndexController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}', [OrderShowController::class, 'show'])->name('orders.show');
 });
 
 Route::middleware(['auth'])->prefix('api')->group(function () {    
@@ -31,6 +36,12 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     Route::get('/designs/{design}', [DesignController::class, 'show'])->name('designs.show');
     Route::put('/designs/{design}', [DesignController::class, 'update'])->name('designs.update');
     Route::delete('/designs/{design}', [DesignController::class, 'destroy'])->name('designs.destroy');
+
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.api.index');
+    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+    Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
+    Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
 });
 
 //AUTH ROUTES

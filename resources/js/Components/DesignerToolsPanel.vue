@@ -74,7 +74,7 @@
 
 <script setup lang="ts">
   import { createCurvedText, reflowCurvedText, applyStrokeToCurved } from '@/utils/curvedText';
-  import { reactive, watch } from 'vue'
+  import { reactive, watch, ref } from 'vue'
   //ensure alignment tools reset Fabric's active object overlay (bounding boxes can get stranded to the prior location)
   import { alignLeft, alignRight, alignCenterX, alignTop, alignBottom, alignMiddleY } from '@/utils/align';
 
@@ -94,6 +94,14 @@ const emit = defineEmits([
   'align-bottom','group','ungroup','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool','undo','redo'
   ,'copy','paste'
 ])
+
+const fileInput = ref<HTMLInputElement | null>(null)
+
+function openFileDialog() {
+  fileInput.value?.click()
+}
+
+defineExpose({ openFileDialog })
 
 </script>
 

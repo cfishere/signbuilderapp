@@ -55,6 +55,11 @@ class User extends Authenticatable
         return $this->hasMany(Design::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function isAdmin(): bool
     {
         // Safely handle null if column doesn’t exist yet
