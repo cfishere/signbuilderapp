@@ -21,6 +21,7 @@ class OrderIndexController extends Controller
                 ->through(fn ($order) => [
                     'id' => $order->id,
                     'order_number' => $order->order_number,
+                    'delivery_method' => $order->delivery_method,
                     'status' => $order->status,
                     'owner_name' => $order->user?->name,
                     'preview_image_url' => $order->preview_image_path
@@ -35,6 +36,7 @@ class OrderIndexController extends Controller
                 ->through(fn ($order) => [
                     'id' => $order->id,
                     'order_number' => $order->order_number,
+                    'delivery_method' => $order->delivery_method,
                     'status' => $order->status,
                     'preview_image_url' => $order->preview_image_path
                         ? Storage::disk('public')->url($order->preview_image_path)

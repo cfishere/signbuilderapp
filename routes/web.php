@@ -8,6 +8,7 @@ use App\Http\Controllers\API\PayPalController;
 use App\Http\Controllers\DesignIndexController;
 use App\Http\Controllers\OrderIndexController;
 use App\Http\Controllers\OrderShowController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -27,9 +28,17 @@ Route::get('/canvas', function (Request $request) {
 })->name('canvas.get');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/account', function () {
+        return Inertia::render('Account');
+    })->name('account.index');
     Route::get('/designs', [DesignIndexController::class, 'index'])->name('designs.index');
     Route::get('/orders', [OrderIndexController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderShowController::class, 'show'])->name('orders.show');
+});
+
+Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
+    Route::get('/users/create', [AdminUserController::class, 'create'])->name('admin.users.create');
+    Route::post('/users', [AdminUserController::class, 'store'])->name('admin.users.store');
 });
 
 Route::middleware(['auth'])->prefix('api')->group(function () {    
@@ -68,7 +77,7 @@ Route::post('/login', function (Request $request) {
 
     if (Auth::attempt($credentials)) {
         $request->session()->regenerate();
-        return redirect()->intended('/editor');
+        return redirect()->intended('/canvas');
     }
 
     return back()->withErrors(['email' => 'Invalid credentials.']);
@@ -89,7 +98,7 @@ Route::post('/register', function (Request $request) {
     ]);
 
     Auth::login($user);
-    return redirect('/editor');
+    return redirect('/canvas');
 });
 
 // Logout

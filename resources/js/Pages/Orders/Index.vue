@@ -29,6 +29,7 @@ const orders = computed(() => page.props.orders);
           <thead class="bg-gray-100 text-xs uppercase text-gray-500">
             <tr>
               <th class="px-3 py-2 text-left">Order</th>
+              <th class="px-3 py-2 text-left">Delivery</th>
               <th class="px-3 py-2 text-left">Status</th>
               <th class="px-3 py-2 text-left">Preview</th>
               <th class="px-3 py-2 text-left">Updated</th>
@@ -45,8 +46,11 @@ const orders = computed(() => page.props.orders);
                 {{ order.order_number || `Order #${order.id}` }}
               </td>
               <td class="px-3 py-2">
+                {{ order.delivery_method || '-' }}
+              </td>
+              <td class="px-3 py-2">
                 <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                  {{ order.status || 'draft' }}
+                  {{ order.status || 'unpaid' }}
                 </span>
               </td>
               <td class="px-3 py-2">

@@ -22,6 +22,7 @@ class Order extends Model
         'region',
         'postal_code',
         'country',
+        'delivery_method',
         'paypal_order_id',
         'paypal_capture_id',
         'paypal_payer_id',
