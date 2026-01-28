@@ -99,8 +99,9 @@ class PayPalController extends Controller
             return response()->json(['message' => 'PayPal auth failed.'], 502);
         }
 
+        // PayPal expects a JSON object body; send an explicit empty object
         $response = Http::withToken($accessToken)
-            ->post($this->baseUrl() . "/v2/checkout/orders/{$paypalOrderId}/capture");
+            ->post($this->baseUrl() . "/v2/checkout/orders/{$paypalOrderId}/capture", (object) []);
 
         if (!$response->successful()) {
             return response()->json([

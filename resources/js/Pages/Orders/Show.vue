@@ -104,12 +104,19 @@ async function renderPayPalButtons() {
     onApprove: async (data: any) => {
       isPaying.value = true;
       paypalStatus.value = 'Capturing payment...';
-      const { data: updated } = await axios.post(`/api/orders/${order.value.id}/paypal/capture`, {
-        paypal_order_id: data.orderID,
-      });
-      order.value = { ...order.value, ...updated };
-      paypalStatus.value = 'Payment captured.';
-      isPaying.value = false;
+      try {
+        const { data: updated } = await axios.post(`/api/orders/${order.value.id}/paypal/capture`, {
+          paypal_order_id: data.orderID,
+        });
+        order.value = { ...order.value, ...updated };
+        paypalStatus.value = 'Payment captured.';
+      } catch (err: any) {
+        const message = err?.response?.data?.message || 'Payment capture failed.';
+        paypalStatus.value = message;
+        console.error('[PayPal] Capture failed', err);
+      } finally {
+        isPaying.value = false;
+      }
     },
     onError: (err: any) => {
       console.error('[PayPal] Error', err);
