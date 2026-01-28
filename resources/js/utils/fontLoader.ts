@@ -58,8 +58,8 @@ export async function ensureFontLoaded(font: FontFamily, opts?: { weight?: numbe
 }
 
 
-export async function preloadFonts(fonts: FontFamily[], limit = 5) {
-  // Preload a small subset at startup to avoid big payloads
-  const slice = fonts.slice(0, limit)
+export async function preloadFonts(fonts: FontFamily[], limit?: number) {
+  const count = typeof limit === 'number' ? limit : fonts.length
+  const slice = fonts.slice(0, count)
   await Promise.all(slice.map(f => ensureFontLoaded(f)))
 }

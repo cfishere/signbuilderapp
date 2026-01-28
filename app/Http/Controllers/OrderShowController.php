@@ -27,6 +27,7 @@ class OrderShowController extends Controller
                 'region' => $order->region,
                 'postal_code' => $order->postal_code,
                 'country' => $order->country,
+                'delivery_method' => $order->delivery_method,
                 'paypal_order_id' => $order->paypal_order_id,
                 'paypal_capture_id' => $order->paypal_capture_id,
                 'paypal_status' => $order->paypal_status,

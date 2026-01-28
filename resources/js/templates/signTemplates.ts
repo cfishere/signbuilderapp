@@ -199,7 +199,7 @@ export const signTemplates = {
       width: null,
       height: null,
       depth: 8,
-      borderWidthInches: null,
+      borderWidthInches: 0,
       material: "aluminum",
       color: "#ffffff",
     },

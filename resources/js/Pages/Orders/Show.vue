@@ -22,6 +22,7 @@ const form = ref({
   region: order.value.region || '',
   postal_code: order.value.postal_code || '',
   country: order.value.country || 'US',
+  delivery_method: order.value.delivery_method || '',
   total_amount: order.value.total_amount ?? '',
   currency: order.value.currency || 'USD',
 });
@@ -150,7 +151,7 @@ async function submitCustomerInfo() {
   try {
     const { data } = await axios.put(`/api/orders/${order.value.id}`, {
       ...form.value,
-      status: 'submitted',
+      status: 'unpaid',
     });
     order.value = { ...order.value, ...data };
     statusMessage.value = 'Customer details saved.';
@@ -281,6 +282,21 @@ async function submitCustomerInfo() {
                   />
                 </div>
               </div>
+              <div>
+                <label class="text-xs uppercase text-gray-400">Delivery Method</label>
+                <select
+                  v-model="form.delivery_method"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                >
+                  <option value="">Select...</option>
+                  <option value="Freight">Freight</option>
+                  <option value="UPS">UPS</option>
+                  <option value="USPS">USPS</option>
+                  <option value="FedEx">FedEx</option>
+                  <option value="Local Pickup">Local Pickup</option>
+                </select>
+                <div v-if="errors.delivery_method" class="text-xs text-red-600">{{ errors.delivery_method }}</div>
+              </div>
               <div class="grid grid-cols-[1fr,100px] gap-2">
                 <div>
                   <label class="text-xs uppercase text-gray-400">Order Total</label>
@@ -304,9 +320,9 @@ async function submitCustomerInfo() {
                 </div>
               </div>
               <div>
-                <span class="text-xs uppercase text-gray-400">Status</span>
-                <div>{{ order.status || 'draft' }}</div>
-              </div>
+              <span class="text-xs uppercase text-gray-400">Status</span>
+              <div>{{ order.status || 'unpaid' }}</div>
+            </div>
               <div>
                 <span class="text-xs uppercase text-gray-400">Submitted</span>
                 <div>{{ order.submitted_at || '-' }}</div>
