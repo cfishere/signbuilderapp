@@ -85,7 +85,7 @@ export function createTextOnPath(opts) {
     selectable: false,
     evented: false,
     hoverCursor: 'default',
-    objectCaching: true
+    objectCaching: false
   });
 
   const glyphs = [];
@@ -107,9 +107,10 @@ export function createTextOnPath(opts) {
       left: x, top: y, angle,
       originX: 'center', originY: 'center',
       fontFamily, fontSize, fontWeight, fontStyle, fill, opacity,
+      padding: Math.max(2, Math.round(fontSize * 0.22)),
       stroke: stroke || undefined,
       strokeWidth: strokeWidth ?? 0,
-      selectable: false, evented: false, objectCaching: true
+      selectable: false, evented: false, objectCaching: false
     }));
     cursor += w + letterSpacing;
   }

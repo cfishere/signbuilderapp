@@ -1,26 +1,26 @@
 <template>
   <div class="w-full min-h-screen bg-white">
-    
+
     <header class="max-w-[1400px] mx-auto px-4">
       <div class="grid grid-cols-12 gap-4 pt-6">
         <!-- left spacer matches sidebar width -->
         <div class="col-span-12 lg:col-span-3"></div>
-        <h1 class="col-span-12 lg:col-span-9 text-center text-2xl sm:text-3xl font-semibold">
+        <h1 class="col-span-12 text-2xl font-semibold text-center lg:col-span-9 sm:text-3xl">
           <!-- Keep your HxW header; pull values from your current props/state -->
           Sign Face {{ formHeightIn }} x {{ formWidthIn }} (inches)
         </h1>
       </div>
-  
-     
+
+
     </header>
 
     <!-- ROW 2: Sidebar + Canvas -->
     <main class="max-w-[1400px] mx-auto px-4">
       <div class="grid grid-cols-12 gap-6 py-6">
         <!-- SIDEBAR (Left) -->
-        <aside class="col-span-12 lg:col-span-3 space-y-6">
+        <aside class="col-span-12 space-y-6 lg:col-span-3">
           <!-- Product / Sign info card -->
-          <section class="border rounded-xl p-4 shadow-sm">
+          <section class="p-4 border shadow-sm rounded-xl">
             <div class="flex items-center justify-center mb-4">
               <!-- If you already compute a thumbnail, keep using it; otherwise swap this binding -->
               <button
@@ -29,24 +29,25 @@
                 aria-label="Open full size sign preview"
                 @click="openFullSize"
               >
-                <img :src="thumbnailSrc" alt="Sign type thumbnail" class="h-20 object-contain" />
-                <span class="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                <img :src="thumbnailSrc" alt="Sign type thumbnail" class="object-contain h-20" />
+                <span class="absolute inset-0 flex items-center justify-center text-xs font-semibold text-white transition-opacity opacity-0 bg-black/40 group-hover:opacity-100">
                   Click to enlarge
                 </span>
               </button>
             </div>
 
                <!-- Settings panel -->
-   <!--  <aside class="w-80 shrink-0 border-r p-4 space-y-4 bg-white"> -->
-      <h2 class="text-lg font-semibold mb-2 text-center">Design Settings</h2>
+   <!--  <aside class="p-4 space-y-4 bg-white border-r w-80 shrink-0"> -->
+      <h2 class="mb-2 text-lg font-semibold text-center">Design Settings</h2>
 
       <!-- Sign Type -->
-      <label class="block font-semibold mb-4">
+      <label class="block mb-4 font-semibold">
         Sign Type
         <select
           v-model="signType"
-          class="mt-2 w-full rounded border p-2"
+          class="w-full p-2 mt-2 border rounded disabled:bg-gray-100 disabled:text-gray-500"
           aria-label="Sign type"
+          :disabled="isSignTypeLocked"
         >
           <option v-for="opt in signTypeOptions" :key="opt.value" :value="opt.value">
             {{ opt.label }}
@@ -56,7 +57,7 @@
 
       <!-- Dimensions -->
 <div class="space-y-3">
-  <h4 class="font-semibold mx-2">Sign Dimensions</h4>
+  <h4 class="mx-2 font-semibold">Sign Dimensions</h4>
     <div class="grid grid-cols-2 gap-2">
       <label class="text-sm">Height (in)</label>
       <input
@@ -66,7 +67,7 @@
         step="0.25"
         v-model.number="formHeightIn"
         :disabled="!editingDims"
-        class="border rounded px-2 py-1 w-full disabled:bg-gray-100"
+        class="w-full px-2 py-1 border rounded disabled:bg-gray-100"
       />
       <label class="text-sm">Width (in)</label>
       <input
@@ -76,18 +77,18 @@
         step="0.25"
         v-model.number="formWidthIn"
         :disabled="!editingDims"
-        class="border rounded px-2 py-1 w-full disabled:bg-gray-100"
-      />      
+        class="w-full px-2 py-1 border rounded disabled:bg-gray-100"
+      />
     </div>
 
     <button
       @click="onToggleDims()"
-      class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+      class="px-3 py-2 text-white bg-blue-600 rounded hover:bg-blue-700"
     >
       {{ editingDims ? 'Save Dimensions' : 'Change Dimensions' }}
     </button>
 
-    <p v-if="dimError" class="text-red-600 text-sm">{{ dimError }}</p>
+    <p v-if="dimError" class="text-sm text-red-600">{{ dimError }}</p>
   </div>
 
   <p class="text-xs text-gray-600">
@@ -95,19 +96,19 @@
       </p>
 
   <div class="mt-4 space-y-2">
-    <h4 class="font-semibold text-sm">Canvas Background</h4>
+    <h4 class="text-sm font-semibold">Canvas Background</h4>
     <div class="flex items-center gap-2">
       <input
         type="color"
         v-model="backgroundColor"
-        class="h-10 w-14 border rounded cursor-pointer"
+        class="h-10 border rounded cursor-pointer w-14"
         aria-label="Canvas background color"
         @change="onBackgroundColorCommit"
       />
       <input
         type="text"
         v-model="backgroundColor"
-        class="flex-1 border rounded px-2 py-1 text-sm"
+        class="flex-1 px-2 py-1 text-sm border rounded"
         placeholder="#ffffff"
         @change="onBackgroundColorCommit"
       />
@@ -121,7 +122,7 @@
     </div>
   </div>
 
-<!-- 
+<!--
 
       <div class="grid grid-cols-2 gap-3">
         <label class="block text-sm font-medium">
@@ -133,7 +134,7 @@
             min="1"
             :value="widthIn"
             @input="onWidthInput"
-            class="mt-1 w-full rounded border p-2"
+            class="w-full p-2 mt-1 border rounded"
             aria-label="Width in inches"
           />
         </label>
@@ -147,7 +148,7 @@
             min="1"
             :value="heightIn"
             @input="onHeightInput"
-            class="mt-1 w-full rounded border p-2"
+            class="w-full p-2 mt-1 border rounded"
             aria-label="Height in inches"
           />
         </label>
@@ -158,14 +159,15 @@
       </p> -->
           </section>
 
-       <ObjectPropertiesPanel
+        <ObjectPropertiesPanel
           class="mt-4"
           :hasSelection="!!hasSelection"
           :kind="selectionKind"
           :styleState="styleState"
-          :fonts="availableFonts"  
+          :fonts="availableFonts"
+          :font-restriction-notice="fontRestrictionNotice"
           :path-meta="selectionState.pathMeta"
-          @font-family="onChangeFontFamily" 
+          @font-family="onChangeFontFamily"
          @change-style="handlePropertiesStyleChange"
         @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
         @path-text-apply="(opts) => tweakSelectedTextOnPath(opts)"
@@ -194,31 +196,34 @@
           </button>
         </div>
 
-          <!-- Auth / Designs panel always visible -->
-          <section class="border rounded-xl p-4 shadow-sm">
-           
-           
-              <p class="text-sm text-gray-600 mb-3">
+          <!-- Auth / Designs panel always visible
+          <section class="p-4 border shadow-sm rounded-xl">
+
+
+              <p class="mb-3 text-sm text-gray-600">
                 Please log in or create an account to save and edit designs.
               </p>
               <div class="flex gap-3">
-                <Link href="/login" method="post" as="button" class="flex-1 border rounded-lg px-3 py-2 text-center hover:bg-gray-50">Login</Link>
-                <small>Don't have an account?</small>               
-                <Link href="/register" method="post" as="button" class="flex-1 border rounded-lg px-3 py-2 text-center hover:bg-gray-50">Register</Link>
+                <Link href="/login" method="post" as="button" class="flex-1 px-3 py-2 text-center border rounded-lg hover:bg-gray-50">Login</Link>
+                <small>Don't have an account?</small>
+                <Link href="/register" method="post" as="button" class="flex-1 px-3 py-2 text-center border rounded-lg hover:bg-gray-50">Register</Link>
               </div>
-           
-          </section>
+
+          </section>-->
         </aside>
 
       <!-- CANVAS STAGE (Right) -->
-<section class="col-span-12 lg:col-span-9 border rounded-xl shadow-sm p-3 relative">
+<section class="relative col-span-12 p-3 border shadow-sm lg:col-span-9 rounded-xl">
 
   <!-- TOOLBAR: directly beneath canvas, horizontal -->
-  <div class="mt-3 rounded-xl border bg-white/90 backdrop-blur p-2 sticky md:static bottom-3 z-10">
-    <DesignerToolsPanel  
+  <div
+    class="sticky z-50 p-2 mt-3 border rounded-xl bg-white/90 backdrop-blur md:relative bottom-3"
+    :class="{ 'pointer-events-none opacity-60 select-none': !isSignTypeSelected }"
+  >
+    <DesignerToolsPanel
       ref="toolsPanel"
       :snapToGrid="snapToGrid"
-      :hasSelection="hasSelection"  
+      :hasSelection="hasSelection"
       :gridVisible="gridVisible"
       :can-undo="canUndo"
       :can-redo="canRedo"
@@ -226,7 +231,7 @@
       @toggle-snap="(val) => snapToGrid = val"
       @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
       @add-text="addText"
-      @add-curved-text="addTextOnPath"     
+      @add-curved-text="addTextOnPath"
       @add-rectangle="addRectangle"
       @add-circle="addCircle"
       @start-line-tool="beginLineDrawMode"
@@ -241,13 +246,13 @@
       @align-middle="alignMiddle"
       @align-bottom="alignBottom"
       @group="groupObjects"
-      @ungroup="ungroupObjects"  
+      @ungroup="ungroupObjects"
       @copy="copySelection"
       @paste="pasteClipboard"
-      @file-upload="handleFileUpload"    
-      :fonts="availableFonts"  
+      @file-upload="handleFileUpload"
+      :fonts="availableFonts"
     />
-<div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+<div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-center sm:justify-between">
   <div class="flex flex-col">
     <label class="text-xs font-semibold text-gray-600">
       Design Title
@@ -260,7 +265,7 @@
     />
   </div>
 
-  <div class="mt-2 flex items-center gap-2 sm:mt-0">
+  <div class="flex items-center gap-2 mt-2 sm:mt-0">
     <button
       type="button"
       class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
@@ -278,18 +283,28 @@
 
   <!-- Canvas container -->
   <div ref="stage" class="relative bg-white border rounded-lg">
+    <div
+      v-if="!isSignTypeSelected"
+      class="absolute inset-0 z-10 flex items-center justify-center text-sm font-semibold text-gray-700 bg-white/80"
+    >
+      Select a sign type to start designing.
+    </div>
     <!-- <div class="absolute inset-0 pointer-events-none"></div> -->
-    <canvas ref="canvasEl" id="canvasEl" class="w-full h-full block mx-auto"></canvas>
+    <canvas
+      ref="canvasEl"
+      id="canvasEl"
+      class="block w-full h-full mx-auto"
+    ></canvas>
   </div>
-  
- 
+
+
 </section>
 </div>
     </main>
 
     <div
       v-if="showFullSize"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
       role="dialog"
       aria-modal="true"
       aria-label="Sign template preview"
@@ -298,7 +313,7 @@
       <div class="relative max-w-[400px] max-h-[400px] w-full">
         <button
           type="button"
-          class="absolute -top-3 -right-3 h-8 w-8 rounded-full bg-white text-gray-700 shadow"
+          class="absolute w-8 h-8 text-gray-700 bg-white rounded-full shadow -top-3 -right-3"
           aria-label="Close preview"
           @click="closeFullSize"
         >
@@ -315,8 +330,8 @@
 </template>
 
 <script setup lang="ts">
-import { usePage, Link } from '@inertiajs/vue3';
-import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted, reactive, getCurrentInstance } from 'vue';
+import { Link } from '@inertiajs/vue3';
+import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted, reactive } from 'vue';
 import { useDesignerRouteGuard } from '@/composables/useDesignerRouteGuard';
 import { ensureFontLoaded, preloadFonts } from '@/utils/fontLoader'
 import axios from 'axios';
@@ -327,8 +342,6 @@ import { createTextOnPath, updateTextOnPath, rehydrateTextOnPath } from '@/utils
 import { signTemplates } from '@/templates/signTemplates';
 import { fabric } from '@/utils/fabricRef';
 import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
-import { createCurvedTextGroup, updateCurvedTextGroup, curvedTextReviver } from '@/utils/curvedText';
-import { applyFontFamily } from '@/utils/applyFontFamily'
 import { getBasePriceForSignType } from '@/utils/pricing'
 
 // Guard Fabric toObject/clone against non-iterable additionalProps
@@ -360,6 +373,29 @@ guardToObject((fabric.Path as any)?.prototype);
 guardToObject((fabric.Polygon as any)?.prototype);
 guardToObject((fabric.Polyline as any)?.prototype);
 
+function patchTextWidth() {
+  const proto = (fabric.Text as any)?.prototype
+  if (!proto || proto.__sbWidthPatched) return
+  const orig = proto.calcTextWidth
+  proto.calcTextWidth = function (...args: any[]) {
+    if (this.type === 'textbox') return orig?.apply(this, args) ?? 0
+    const fontStyle = this.fontStyle === 'italic' ? 'italic' : 'normal'
+    const fontWeight = String(this.fontWeight || 'normal')
+    const fontSize = Number(this.fontSize || 0)
+    const fontFamily = this.fontFamily || 'sans-serif'
+    const font = `${fontStyle === 'italic' ? 'italic ' : ''}${fontWeight} ${fontSize}px ${fontFamily}`
+    const lines = Array.isArray(this._textLines)
+      ? this._textLines.map((l: any) => Array.isArray(l) ? l.join('') : String(l))
+      : null
+    const text = (lines && lines.length) ? lines.join('\n') : String(this.text ?? '')
+    const svgMetrics = measureTextSvgMetrics(text, font)
+    return Math.max(svgMetrics.width || 0, orig?.apply(this, args) ?? 0)
+  }
+  proto.__sbWidthPatched = true
+}
+
+patchTextWidth()
+
 // Also guard clone to normalize propertiesToInclude
 const __origClone = fabric.Object.prototype.clone;
 fabric.Object.prototype.clone = function (callback: any, propertiesToInclude?: any) {
@@ -383,10 +419,130 @@ async function onFontFamilyChange(family: string) {
 document.fonts.check('1em "Story Script"')
 
 //check fabric version:
-console.log("Fabric version is: "+fabric.version)
+// Fabric version available via fabric.version if needed
 
 
-const isChannelLetter = computed(() => signType.value === 'channel_letter')
+const SIGN_TYPE_TEMPLATE_FALLBACK: Record<string, string> = {
+  'Wall Sign Illuminated': 'wall_illum',
+  'Wall Sign Exterior': 'wall_ext',
+  'Wall Sign Interior': 'WALL_INT',
+  'Pylon Illuminated Cabinet': 'pylon_illum',
+  'Pylon Non-Illuminated': 'pylon',
+  'Monument Illuminated': 'monument_illum',
+  'Monument': 'monument',
+  'Channel Letters': 'channel_letters',
+  'Cut Letters Interior': 'cut_ltrs',
+  'Cut Letters Exterior': 'cut_ltrs',
+  'Face Replacement': 'face_replacement',
+  'Face Replacement Illuminated': 'face_replacement'
+}
+
+const LEGACY_SIGN_TYPE_FALLBACK: Record<string, string> = {
+  wall_sign_cabinet: 'Wall Sign Illuminated',
+  wall_sign_exterior: 'Wall Sign Exterior',
+  wall_sign_interior: 'Wall Sign Interior',
+  channel_letters: 'Channel Letters',
+  pylon: 'Pylon Non-Illuminated',
+  pylon_illum: 'Pylon Illuminated Cabinet',
+  monument: 'Monument',
+  monument_illum: 'Monument Illuminated',
+  cut_ltrs: 'Cut Letters Exterior',
+  face_replacement: 'Face Replacement'
+}
+
+function resolveSignTypeLabel(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  if (raw in signTemplates) return raw
+  const byTemplate = Object.keys(signTemplates).find(
+    key => signTemplates[key]?.template === raw
+  )
+  if (byTemplate) return byTemplate
+  return LEGACY_SIGN_TYPE_FALLBACK[raw] ?? null
+}
+
+const isChannelLetter = computed(() => {
+  const key = signType.value
+  const template = signTemplates[key]
+  const templateId = template?.template ?? SIGN_TYPE_TEMPLATE_FALLBACK[key]
+  return templateId === 'channel_letters'
+})
+
+const isSignTypeSelected = computed(() => !!signType.value)
+const isSignTypeLocked = computed(() => !!signType.value)
+
+const CHANNEL_LETTER_DEFAULT_FONT = 'Anton'
+const CHANNEL_LETTER_ALLOWED_FONTS = new Set(
+  FONT_CATALOG.filter(isAllowedForChannelLetters).map(f => f.family)
+)
+
+function isFontAllowedForChannelLetters(family: string | null | undefined) {
+  if (!family) return true
+  return CHANNEL_LETTER_ALLOWED_FONTS.has(family)
+}
+
+function collectTextNodes(obj: any, out: any[] = []) {
+  if (!obj) return out
+  if (obj.type === 'text' || obj.type === 'i-text' || obj.type === 'textbox') {
+    out.push(obj)
+  }
+  const children = obj._objects || []
+  children.forEach((child: any) => collectTextNodes(child, out))
+  return out
+}
+
+async function enforceChannelLetterFontRestrictions() {
+  if (!canvas) return
+
+  const defaultMeta =
+    FONT_CATALOG.find(f => f.family === CHANNEL_LETTER_DEFAULT_FONT)
+    ?? { family: CHANNEL_LETTER_DEFAULT_FONT, weights: [400] }
+
+  await ensureFontLoaded(defaultMeta)
+
+  let changed = false
+
+  canvas.getObjects().forEach((obj: any) => {
+    if (isTextOnPathGroup(obj)) {
+      const baseMeta = obj.sbPathMeta || obj.data?.options || {}
+      const currentFamily = baseMeta.fontFamily || obj.fontFamily
+      if (!isFontAllowedForChannelLetters(currentFamily)) {
+        const nextMeta = { ...baseMeta, fontFamily: CHANNEL_LETTER_DEFAULT_FONT }
+        obj.sbPathMeta = nextMeta
+        if (obj.data?.options) {
+          obj.data.options = { ...(obj.data.options || {}), ...nextMeta }
+        }
+        reflowTextOnPath(obj, nextMeta)
+        changed = true
+      }
+      return
+    }
+
+    const textNodes = collectTextNodes(obj)
+    textNodes.forEach((node: any) => {
+      const currentFamily = node.fontFamily
+      if (!isFontAllowedForChannelLetters(currentFamily)) {
+        node.set({ fontFamily: CHANNEL_LETTER_DEFAULT_FONT })
+        node.initDimensions?.()
+        node.setCoords?.()
+        node.dirty = true
+        changed = true
+      }
+    })
+  })
+
+  if (changed) {
+    canvas.requestRenderAll()
+    hydrateStyleFromObject(canvas.getActiveObject?.() ?? null)
+    updateSelectedObject()
+    pushHistorySnapshot('font:restricted')
+  }
+}
+
+const fontRestrictionNotice = computed(() => {
+  if (!isChannelLetter.value) return ''
+  const label = signType.value || 'This sign type'
+  return `${label} signs have font limitations`
+})
 // Fonts to show in the dropdown:
 const availableFonts = computed(() => {
   if (isChannelLetter.value) {
@@ -413,7 +569,6 @@ const maxHeightIn = computed<number | null>(() => {
 /** pixels per logical inch (base density; zoom handles fitting) */
 const ppi = ref(12)              // 1 inch = 12 px (design scale)
 const zoom = ref(1)
-const page = usePage()
 
 //RESIZE CANVAS MODIFICATION
 const props = defineProps({
@@ -447,14 +602,13 @@ const props = defineProps({
     type: Number,
     default: null, // inches
   },
-}) 
+})
 
 // local state
 const editingDims = ref(false)
 const formWidthIn = ref(props.initialWidthIn)
 const formHeightIn = ref(props.initialHeightIn)
 const dimError = ref('')
-const gridEnabled = ref(true);       // or from your existing state
 const gridSize = ref(24);            // 24px squares
 const backgroundColor = ref('#ffffff');
 const showFullSize = ref(false)
@@ -503,8 +657,9 @@ const hasSelection = ref(false)
   | 'image'
   | 'generic'
   | 'unknown';*/
-const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')  
+const selectionKind = ref<'none' | 'text' | 'text-on-path' | 'rect' | 'circle' | 'line' | 'generic'>('none')
 const isLoadingDesign = ref(false)
+const isHydratingDesign = ref(false)
 let clipboard: any = null
 let clipboardJson: string | null = null
 
@@ -514,6 +669,7 @@ const keyHandler = (e: KeyboardEvent) => {
     closeFullSize();
     return;
   }
+  if (!isSignTypeSelected.value) return;
   const target = e.target as HTMLElement | null;
   const tag = target?.tagName?.toLowerCase();
   const isInput = tag === 'input' || tag === 'textarea' || target?.isContentEditable;
@@ -645,11 +801,6 @@ function pushHistorySnapshot(label?: string) {
   history.value.push(json);
   historyIndex.value = history.value.length - 1;
 
-  console.log('[history] push', {
-    label,
-    index: historyIndex.value,
-    length: history.value.length,
-  });
 }
 
 function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
@@ -737,8 +888,6 @@ function restoreHistoryAt(index: number) {
 
   const json = history.value[index];
 
-  console.log('[history] restore', { index });
-
   isRestoringHistory = true;
   c.loadFromJSON(json, () => {
     c.setViewportTransform([1, 0, 0, 1, 0, 0]);
@@ -758,7 +907,6 @@ function restoreHistoryAt(index: number) {
 function undoCanvas() {
   if (!canUndo.value) return;
   const targetIndex = historyIndex.value;
-  console.log('[history] undo →', targetIndex);
   historyIndex.value = targetIndex -1;
   restoreHistoryAt(targetIndex);
 }
@@ -766,7 +914,6 @@ function undoCanvas() {
 function redoCanvas() {
   if (!canRedo.value) return;
   const targetIndex = historyIndex.value + 1;
-  console.log('[history] redo →', targetIndex);
   historyIndex.value = targetIndex;
   restoreHistoryAt(targetIndex);
 }
@@ -813,13 +960,29 @@ function applyTemplateDefaults(templateKey: string) {
     resizeCanvasNoScale(width, height, 'top-left')
     refreshGrid()
     updateFaceRetainer()
+    scheduleFaceRetainerRebuild('post-size')
   }
 }
 
 watch(
   signType,
-  (next) => {
+  async (next) => {
+    if (isHydratingDesign.value) return
     applyTemplateDefaults(next)
+    if (isChannelLetter.value) {
+      await enforceChannelLetterFontRestrictions()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  isSignTypeSelected,
+  (ready) => {
+    const upper = canvas?.upperCanvasEl as HTMLCanvasElement | undefined
+    const lower = canvas?.lowerCanvasEl as HTMLCanvasElement | undefined
+    if (upper) upper.style.pointerEvents = ready ? 'auto' : 'none'
+    if (lower) lower.style.pointerEvents = ready ? 'auto' : 'none'
   },
   { immediate: true }
 )
@@ -866,7 +1029,6 @@ function updateSelectionFromCanvasSelection() {
   }
 
   const kind = getSelectionKind(obj as any);
-  console.log('getSelectionKind(obj), returns :', kind);
   selectionKind.value = kind;
 
   if (kind === 'text-on-path') {
@@ -891,7 +1053,6 @@ function updateSelectionFromCanvasSelection() {
 
 
 function bindCanvasSelectionEvents(fCanvas) {
-  console.log("bindCanvasSelectionEvents called")
   const syncActive = () => {
     const obj = fCanvas.getActiveObject();
     activeObj.value = obj || null;
@@ -921,17 +1082,17 @@ function bindCanvasSelectionEvents(fCanvas) {
     hydrateStyleFromObject(e.selected?.[0] ?? null);
     onSelectionChange
     syncActive;
-    
+
   });
   fCanvas.on('selection:updated', (e) => {
     hydrateStyleFromObject(e.selected?.[0] ?? null);
     onSelectionChange
     syncActive;
-    
+
   });
-  fCanvas.on('selection:cleared', () => { 
+  fCanvas.on('selection:cleared', () => {
     onSelectionClear
-    activeObj.value = null; 
+    activeObj.value = null;
     hydrateStyleFromObject(null);
   });
 }
@@ -947,7 +1108,7 @@ function fitZoomToFace() {
 
 // For now, just call fitZoom stub if a canvas exists.
 /*watch([widthIn, heightIn, signType], () => {
-  
+
   if (canvas) fitZoomToFace()
 })*/
 
@@ -958,14 +1119,13 @@ const wrapRef = ref(null);       // wrapper <div ref="wrapRef">
 /*let gridGroup: fabric.Group | null = null*/
 let gridGroup: fabric.Object | null = null;
 function hydrateStyleFromObject(obj: any | null) {
-  
+
   if (!obj) {
     selectionKind.value = 'none'
     return
   }
 
   selectionKind.value = getSelectionKind(obj)
-  console.log("getSelectionKind(obj), returns : "+selectionKind.value) //e.g. returns: rect
   if (isTextOnPathGroup(obj)) {
   const o = obj.sbPathMeta || obj.data?.options || {};
 
@@ -1151,11 +1311,11 @@ canvas.on('selection:cleared', () => {
   canvas.on('object:moving', (e) => {
     if (!snapToGrid.value) return
       if (isRestoringHistory) return;
-    const obj = e.target    
+    const obj = e.target
     obj.set({
       left: Math.round(obj.left / 24) * 24,
       top: Math.round(obj.top / 24) * 24,
-    })    
+    })
     pushHistorySnapshot('object:moved');
   })
   canvas.on('object:added', (e) => {
@@ -1167,7 +1327,7 @@ canvas.on('selection:cleared', () => {
 
     ensureObjectBelowFaceRetainer(target)
 
-    /*object:added was duplicating the pushHistory snapshots that 
+    /*object:added was duplicating the pushHistory snapshots that
     addCircle, etc, were calling:
     pushHistorySnapshot('object:added');*/
   });
@@ -1194,17 +1354,14 @@ canvas.on('selection:cleared', () => {
   // 5) Observe wrapper size so layout changes never “blank” the canvas again
   observeCanvasWrapperResize()
 
-  // 6) Preload fonts after first stable paint
-  await preloadFonts([
-    { family: 'Bebas Neue', weights: [400] },
-    { family: 'Playfair Display', weights: [400, 700] },
-    { family: 'Anton', weights: [400] },
-    { family: 'Lora', weights: [400, 700] }
-  ], 4)
+  // 6) Preload all fonts after first stable paint (do not block load)
+  preloadFonts(FONT_CATALOG).catch((e) => {
+    console.warn('[fonts] preload failed', e)
+  })
 
   // Final paint to cover any async font/layout tweaks
   canvas.requestRenderAll()
- 
+
   if (!props.designId) {
     /*drawGrid(canvas);*/
     gridVisible.value = true;
@@ -1231,13 +1388,18 @@ async function loadDesignById(id: number | null) {
   }
 
   isLoadingDesign.value = true;
+  isHydratingDesign.value = true;
 
   try {
-    console.log('[loadDesignById] Fetching design', id);
     const { data: design } = await axios.get(`/api/designs/${id}`);
 
     currentDesignId.value = design.id;
     designName.value = design.name || 'My Sign Design';
+
+    const resolvedSignType = resolveSignTypeLabel(design.sign_type)
+    if (resolvedSignType) {
+      signType.value = resolvedSignType
+    }
 
     const c = fabricCanvas.value;
 
@@ -1248,26 +1410,33 @@ async function loadDesignById(id: number | null) {
     if (widthInches) formWidthIn.value = widthInches;
     if (heightInches) formHeightIn.value = heightInches;
 
-    // 2) Set canvas pixel dimensions straight from DB
-    const pxW = design.canvas_width || c.getWidth();
-    const pxH = design.canvas_height || c.getHeight();
-
-    c.setDimensions({ width: pxW, height: pxH }, { cssOnly: false });
-    c.calcOffset();
-
-    // 3) Restore per-design PPI / grid step
+    // 2) Restore per-design PPI / grid step before sizing
     if (design.grid_size) {
       ppi.value = design.grid_size; // now matches what was used when saved
     }
 
-    // 4) Background color
+    // 3) Apply grid visibility before rebuild
+    gridVisible.value = design.grid_enabled ?? true;
+
+    // 4) Set canvas dimensions from the saved sign size (authoritative)
+    if (widthInches && heightInches) {
+      resizeCanvasNoScale(widthInches, heightInches, 'top-left')
+    } else {
+      const pxW = design.canvas_width || c.getWidth();
+      const pxH = design.canvas_height || c.getHeight();
+      c.setDimensions({ width: pxW, height: pxH }, { cssOnly: false });
+      c.calcOffset();
+    }
+    updateFaceRetainer()
+
+    // 5) Background color
     if (design.background_color) {
       setBackgroundColor(design.background_color);
     } else {
       setBackgroundColor('#ffffff');
     }
 
-    // 5) Load Fabric JSON
+    // 6) Load Fabric JSON
     if (design.canvas_state) {
       await new Promise((resolve) => {
         c.loadFromJSON(design.canvas_state, () => {
@@ -1280,23 +1449,32 @@ async function loadDesignById(id: number | null) {
 
           c.requestRenderAll();
           refreshGrid();
+          updateFaceRetainer()
+          scheduleFaceRetainerRebuild('post-load-json')
+          resolve(true);
         });
       });
     }
 
-    // 6) Rebuild grid overlay AFTER objects are in place
-    gridVisible.value = design.grid_enabled ?? true;
+    // 7) Rebuild grid overlay AFTER objects are in place
     refreshGrid();
+    ensureGridVisibleSoon();
+    scheduleGridRebuild('post-load');
+    scheduleFaceRetainerRebuild('post-load');
+    if (isChannelLetter.value) {
+      await enforceChannelLetterFontRestrictions()
+    }
     // New: reset history for this design
     history.value = [];
     historyIndex.value = -1;
     pushHistorySnapshot('loaded design');
 
-    showToast('Design loaded.');
+    // Design loaded; no user alert needed.
   } catch (error) {
     console.error('[loadDesignById] Error loading design', error);
     window.alert('Failed to load design.');
   } finally {
+    isHydratingDesign.value = false;
     isLoadingDesign.value = false;
   }
 }
@@ -1322,6 +1500,12 @@ function observeCanvasWrapperResize() {
       }
 
       canvas.requestRenderAll()
+      if (gridVisible.value) {
+        refreshGrid()
+      }
+      if (hasCabinet.value) {
+        updateFaceRetainer()
+      }
     }
   })
 
@@ -1451,7 +1635,9 @@ function updateFaceRetainer() {
 
   if (!hasCabinet.value) return
 
-  const retainerPx = Math.max(1, Math.round(FACE_RETAINER_IN * ppi.value))
+  const borderIn =
+    (selectedCabinet.value?.borderWidthInches ?? FACE_RETAINER_IN)
+  const retainerPx = Math.max(1, Math.round(borderIn * ppi.value))
   const w = canvas.getWidth()
   const h = canvas.getHeight()
   if (retainerPx * 2 >= w || retainerPx * 2 >= h) return
@@ -1538,10 +1724,117 @@ function getSelectionKind(obj: fabric.Object | null | undefined): SelectionKind 
   return 'generic';
 }
 
+
+
+// Use SVG getBBox for italic/bold glyph bounds; Canvas measureText can under-report overhang.
+function measureTextSvgMetrics(text: any, font: string) {
+  if (typeof document === 'undefined') return { left: 0, right: 0 }
+  const safeText = text == null ? '' : String(text)
+  const lines = safeText.split('\n')
+  let maxLeft = 0
+  let maxRight = 0
+  let maxWidth = 0
+  const svgNS = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(svgNS, 'svg')
+  const textEl = document.createElementNS(svgNS, 'text')
+  svg.setAttribute('width', '0')
+  svg.setAttribute('height', '0')
+  svg.style.position = 'absolute'
+  svg.style.left = '-99999px'
+  svg.style.top = '-99999px'
+  textEl.setAttribute('x', '0')
+  textEl.setAttribute('y', '0')
+  textEl.style.font = font
+  svg.appendChild(textEl)
+  document.body.appendChild(svg)
+  const canvasEl = document.createElement('canvas')
+  const ctx = canvasEl.getContext('2d')
+  if (ctx) ctx.font = font
+
+  for (const line of lines) {
+    textEl.textContent = line
+    const bbox = textEl.getBBox()
+    const width = ctx ? ctx.measureText(line).width : bbox.width
+    const left = Math.max(0, -bbox.x)
+    const right = Math.max(0, bbox.x + bbox.width - width)
+    if (left > maxLeft) maxLeft = left
+    if (right > maxRight) maxRight = right
+    if (bbox.width > maxWidth) maxWidth = bbox.width
+  }
+
+  document.body.removeChild(svg)
+  return { left: maxLeft, right: maxRight, width: maxWidth }
+}
+
+function measureTextOverhang(text: any, font: string) {
+  const metrics = measureTextSvgMetrics(text, font)
+  return { left: metrics.left, right: metrics.right }
+}
+
+function recomputeTextBounds(obj: any) {
+  if (!obj || !obj.type || !['text', 'i-text', 'textbox'].includes(obj.type)) return
+  if (obj.text == null) obj.text = ''
+  try {
+    obj._clearCache?.()
+    obj._splitTextIntoLines?.()
+    obj.initDimensions?.()
+    obj.setCoords?.()
+  } catch (err) {
+    // Guard against Fabric internal splits on undefined text
+    obj.text = obj.text ?? ''
+    obj.initDimensions?.()
+    obj.setCoords?.()
+  }
+}
+
+function normalizeTextPadding(obj: any) {
+  if (!obj || !obj.type || !['text', 'i-text', 'textbox'].includes(obj.type)) return
+  const fontSize = Number(obj.fontSize || 0)
+  const fontStyle = obj.fontStyle === 'italic' ? 'italic' : 'normal'
+  const fontWeight = String(obj.fontWeight || 'normal')
+  const fontFamily = obj.fontFamily || 'sans-serif'
+  const scaleX = Number(obj.scaleX ?? 1)
+  const scaleY = Number(obj.scaleY ?? 1)
+  const scale = Math.max(1, (Math.abs(scaleX) + Math.abs(scaleY)) / 2)
+
+  const lines = Array.isArray(obj._textLines) ? obj._textLines.map((l: any) => Array.isArray(l) ? l.join('') : String(l)) : null
+  const text = (lines && lines.length) ? lines.join('\n') : String(obj.text ?? '')
+  const font = `${fontStyle === 'italic' ? 'italic ' : ''}${fontWeight} ${fontSize}px ${fontFamily}`
+  const overhang = measureTextOverhang(text, font)
+
+  let pad = Math.max(2, Math.round(fontSize * 0.12))
+  pad += Math.round(Math.max(overhang.left, overhang.right))
+
+  obj.set('padding', Math.max(2, Math.round(pad / scale)))
+  obj.set('objectCaching', false)
+  obj.dirty = true
+  recomputeTextBounds(obj)
+}
+
+function normalizeTextOnPathPadding(group: any, meta: any) {
+  if (!group || !Array.isArray(group._objects)) return
+  const fontSize = Number(meta?.fontSize || group.sbPathMeta?.fontSize || 0)
+  const fontStyle = meta?.fontStyle || group.sbPathMeta?.fontStyle
+  const fontWeight = meta?.fontWeight || group.sbPathMeta?.fontWeight
+  const isItalic = fontStyle === 'italic'
+  const isBold = String(fontWeight || '').toLowerCase() === 'bold' || Number(fontWeight) >= 600
+  let pad = Math.max(2, Math.round(fontSize * 0.12))
+  if (isItalic || isBold) pad += Math.round(fontSize * 0.06)
+  group._objects.forEach((o: any) => {
+    if (o?.type === 'text') {
+      o.set('padding', pad)
+      o.set('objectCaching', false)
+      o.dirty = true
+      o.initDimensions?.()
+      o.setCoords?.()
+    }
+  })
+  group.set('objectCaching', false)
+  group.setCoords?.()
+}
+
 // Apply a style patch to ONE object (plain text / shapes)
 function applyStyleToObject(obj, patch) {
-  console.log('applyStyleToObject called for', obj.type, 'with patch', patch)
-
   // 1) Normalize basic keys
   const mapped = {
     ...(patch.fill         != null ? { fill: String(patch.fill) } : {}),
@@ -1561,7 +1854,9 @@ function applyStyleToObject(obj, patch) {
     ...(patch.shadow        != null ? { shadow: patch.shadow } : {}),
   }
 
-  // 2) Build the native patch for Fabric (fill/stroke/fonts/etc.)
+    const isTextObj = ['text', 'i-text', 'textbox'].includes(obj.type)
+
+// 2) Build the native patch for Fabric (fill/stroke/fonts/etc.)
   const patchNative: any = {}
   if ('fill'        in mapped) patchNative.fill        = mapped.fill
   if ('stroke'      in mapped) patchNative.stroke      = mapped.stroke
@@ -1634,15 +1929,16 @@ function applyStyleToObject(obj, patch) {
   }
 
   obj.set(patchNative)
+  if (isTextObj) normalizeTextPadding(obj)
   obj.setCoords?.()
 }
 
 
 
 
-//when resizing canvas dim, preserve aspect ratio & size of all art, 
+//when resizing canvas dim, preserve aspect ratio & size of all art,
 //including the grid
-function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number, 
+function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number,
   anchor: 'top-left'|'center'|'bottom-right' = 'top-left') {
   const oldW = canvas.getWidth()
   const oldH = canvas.getHeight()
@@ -1692,7 +1988,6 @@ function updateTextOnPath(group: any, patch: Record<string, any>) {
 
 
 function applyStyleToSelection(style: Record<string, any>) {
-  console.log("applyStyleToSelection Called")
   const sel = canvas?.getActiveObject()
   if (!sel) return
 
@@ -1951,9 +2246,9 @@ async function onChangeFontFamily(family: string) {
   targets.forEach(obj => {
     // @ts-ignore Fabric text props
     obj.set({ fontFamily: family })
-    obj.setCoords()   
-  })  
-  
+    obj.setCoords()
+  })
+
   canvas.requestRenderAll()
 }
 
@@ -1996,7 +2291,7 @@ function updateSelectedObject() {
   }
 }
 
- 
+
 
 function getSelectionTargets(): fabric.Object[] {
   if (!canvas) return []
@@ -2092,11 +2387,6 @@ function drawGrid(canvas) {
 function removeGrid() {
   if (!canvas) return;
 
-  console.log(
-    '[removeGrid] before:',
-    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
-  );
-
   canvas.getObjects().forEach((obj) => {
     const anyObj = obj as any;
     if (anyObj.isGrid || anyObj.name === 'grid') {
@@ -2105,22 +2395,10 @@ function removeGrid() {
   });
 
   gridGroup = null;
-
-  console.log(
-    '[removeGrid] after:',
-    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
-  );
 }
 
 function refreshGrid() {
   if (!canvas) return;
-
-  console.log(
-    '[refreshGrid] gridVisible:',
-    gridVisible.value,
-    'objects:',
-    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
-  );
 
   removeGrid();
 
@@ -2175,10 +2453,40 @@ function refreshGrid() {
   }
   canvas.requestRenderAll();
 
-  console.log(
-    '[refreshGrid] after rebuild:',
-    canvas.getObjects().map(o => (o as any).isGrid ? 'grid' : (o as any).name)
-  );
+}
+
+function hasGridObjects() {
+  if (!canvas) return false
+  return canvas.getObjects().some((obj: any) => obj?.isGrid || obj?.name === 'grid')
+}
+
+function ensureGridVisibleSoon() {
+  if (!gridVisible.value) return
+  if (hasGridObjects()) return
+  setTimeout(() => {
+    if (!gridVisible.value) return
+    refreshGrid()
+  }, 0)
+}
+
+function scheduleGridRebuild(label?: string) {
+  if (!gridVisible.value) return
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!gridVisible.value) return
+      refreshGrid()
+    })
+  })
+}
+
+function scheduleFaceRetainerRebuild(label?: string) {
+  if (!hasCabinet.value) return
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!hasCabinet.value) return
+      updateFaceRetainer()
+    })
+  })
 }
 
 /** Call this any time zoom changes to keep grid lines thin */
@@ -2296,6 +2604,7 @@ function addText() {
     fill: '#999999',
     fontSize: 20,
   });
+  normalizeTextPadding(text);
   canvas.add(text);
   canvas.setActiveObject(text);
   canvas.requestRenderAll();
@@ -2512,7 +2821,7 @@ onBeforeUnmount(() => {
 function normalizeTextStyleUpdate(u) {
  /** @type {Record<string, any>} */
   const out = {};
-  
+
   if (!u || typeof u !== 'object') return out;
 
   // colors
@@ -2642,7 +2951,7 @@ function normalizeTextStyleUpdate(u) {
   group.setCoords();
 }
 
-  
+
 
 
 function uploadImage() {
@@ -2891,8 +3200,8 @@ function addBasePostForSign(signType) {
 
     canvas.add(post);
     post.sendToBack();
-  }  
- 
+  }
+
 }
 
 async function saveDesign() {
@@ -2918,8 +3227,8 @@ async function saveDesign() {
       ?? props.signHeight
       ?? pxToInches(c.getHeight());
 
-    const pxW = c.getWidth();
-    const pxH = c.getHeight();
+    const pxW = Math.round(c.getWidth());
+    const pxH = Math.round(c.getHeight());
 
     // 2) Compute effective PPI for this design, if we can
     let effectivePpi = ppi.value;
@@ -2977,6 +3286,10 @@ async function saveDesign() {
     return design;
   } catch (err) {
     console.error('[saveDesign] Error:', err);
+    const serverErrors = err?.response?.data?.errors;
+    if (serverErrors) {
+      console.error('[saveDesign] Validation errors:', serverErrors);
+    }
     showToast('Failed to save design. Please try again.', 'error');
     return null;
   } finally {
@@ -3033,7 +3346,7 @@ async function orderSign() {
     }
 
     const { data: order } = await axios.post('/api/orders', {
-      status: 'draft',
+      status: 'unpaid',
       design_id: designId,
       total_amount: getBasePriceForSignType(signType.value),
       currency: 'USD',
@@ -3111,7 +3424,7 @@ function tweakSelectedTextOnPath(opts: any) {
     normalized = stripStyleFieldsFromGeometryUpdate(normalized);
   }
 
-  const anySel = sel as any;   
+  const anySel = sel as any;
 
   const base = {
     ...(anySel.data?.options || {}),
@@ -3132,6 +3445,7 @@ function tweakSelectedTextOnPath(opts: any) {
   }
 
   applyTextOnPathStyleInPlace(anySel, merged);
+  normalizeTextOnPathPadding(anySel, merged);
   canvas?.requestRenderAll();
 }
 
@@ -3184,7 +3498,6 @@ function tweakSelectedTextOnPath(opts: any) {
     // CRITICAL: mark child dirty for cached rendering
     g.dirty = true;
   }
-console.log('glyph[0] fill after:', group._objects?.[1]?.fill);
   // CRITICAL: mark group dirty too
   group.dirty = true;
 

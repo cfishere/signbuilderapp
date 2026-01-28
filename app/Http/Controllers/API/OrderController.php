@@ -31,8 +31,8 @@ class OrderController extends Controller
         $this->authorize('create', Order::class);
 
         $validated = $request->validate([
-            'order_number' => 'nullable|string|max:255',
-            'status' => 'nullable|string|in:draft,submitted,paid,in_production,completed,canceled',
+            'order_number' => 'nullable|integer|min:1|max:999999',
+            'status' => 'nullable|string|in:unpaid,paid,completed',
             'total_amount' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|size:3',
             'customer_name' => 'nullable|string|max:255',
@@ -42,6 +42,7 @@ class OrderController extends Controller
             'region' => 'nullable|string|max:255',
             'postal_code' => 'nullable|string|max:20',
             'country' => 'nullable|string|max:2',
+            'delivery_method' => 'nullable|string|in:Freight,UPS,USPS,FedEx,Local Pickup',
             'notes' => 'nullable|string|max:2000',
             'metadata' => 'nullable|array',
             'design_id' => 'nullable|integer|exists:designs,id',
@@ -49,11 +50,13 @@ class OrderController extends Controller
             'submitted_at' => 'nullable|date',
         ]);
 
-        $validated['status'] = $validated['status'] ?? 'draft';
+        $validated['status'] = $validated['status'] ?? 'unpaid';
         $this->assertCustomerFieldsPresent($validated, $validated['status'], null);
 
+        $orderNumber = $validated['order_number'] ?? $this->nextOrderNumber();
+
         $order = Auth::user()->orders()->create([
-            'order_number' => $validated['order_number'] ?? null,
+            'order_number' => $orderNumber,
             'status' => $validated['status'],
             'total_amount' => $validated['total_amount'] ?? null,
             'currency' => $validated['currency'] ?? 'USD',
@@ -64,6 +67,7 @@ class OrderController extends Controller
             'region' => $validated['region'] ?? '',
             'postal_code' => $validated['postal_code'] ?? '',
             'country' => $validated['country'] ?? 'US',
+            'delivery_method' => $validated['delivery_method'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'metadata' => $validated['metadata'] ?? null,
             'submitted_at' => $validated['submitted_at'] ?? null,
@@ -73,6 +77,7 @@ class OrderController extends Controller
             $design = Design::find($validated['design_id']);
             if ($design && $design->user_id === $order->user_id) {
                 $design->order_id = $order->id;
+                $design->status = 'ordered';
                 $design->save();
             }
         }
@@ -100,8 +105,8 @@ class OrderController extends Controller
         $this->authorize('update', $order);
 
         $validated = $request->validate([
-            'order_number' => 'sometimes|nullable|string|max:255',
-            'status' => 'sometimes|string|in:draft,submitted,paid,in_production,completed,canceled',
+            'order_number' => 'sometimes|nullable|integer|min:1|max:999999',
+            'status' => 'sometimes|string|in:unpaid,paid,completed',
             'total_amount' => 'sometimes|nullable|numeric|min:0',
             'currency' => 'sometimes|nullable|string|size:3',
             'customer_name' => 'sometimes|nullable|string|max:255',
@@ -111,13 +116,14 @@ class OrderController extends Controller
             'region' => 'sometimes|nullable|string|max:255',
             'postal_code' => 'sometimes|nullable|string|max:20',
             'country' => 'sometimes|nullable|string|max:2',
+            'delivery_method' => 'sometimes|nullable|string|in:Freight,UPS,USPS,FedEx,Local Pickup',
             'notes' => 'sometimes|nullable|string|max:2000',
             'metadata' => 'sometimes|nullable|array',
             'preview_image_data' => 'sometimes|nullable|string',
             'submitted_at' => 'sometimes|nullable|date',
         ]);
 
-        $status = $validated['status'] ?? $order->status ?? 'draft';
+        $status = $validated['status'] ?? $order->status ?? 'unpaid';
         $this->assertCustomerFieldsPresent($validated, $status, $order);
 
         $order->update($validated);
@@ -163,7 +169,7 @@ class OrderController extends Controller
 
     private function assertCustomerFieldsPresent(array $validated, string $status, ?Order $order): void
     {
-        if ($status === 'draft') {
+        if ($status === 'unpaid') {
             return;
         }
 
@@ -186,5 +192,12 @@ class OrderController extends Controller
         if ($missing) {
             throw ValidationException::withMessages($missing);
         }
+    }
+
+    private function nextOrderNumber(): int
+    {
+        $current = (int) (Order::max('order_number') ?? 0);
+        $next = $current + 1;
+        return min($next, 999999);
     }
 }
