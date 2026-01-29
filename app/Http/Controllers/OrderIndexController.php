@@ -15,7 +15,7 @@ class OrderIndexController extends Controller
         $user = $request->user();
 
         if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-            $orders = Order::with('user')
+            $orders = Order::with(['user', 'designs', 'job'])
                 ->latest()
                 ->paginate(20)
                 ->through(fn ($order) => [
@@ -24,8 +24,12 @@ class OrderIndexController extends Controller
                     'delivery_method' => $order->delivery_method,
                     'status' => $order->status,
                     'owner_name' => $order->user?->name,
+                    'design_id' => $order->designs?->sortByDesc('id')->first()?->id,
                     'preview_image_url' => $order->preview_image_path
                         ? Storage::disk('public')->url($order->preview_image_path)
+                        : null,
+                    'print_image_url' => $order->job?->print_image_path
+                        ? Storage::disk('public')->url($order->job->print_image_path)
                         : null,
                     'updated_at' => optional($order->updated_at)->toDateTimeString(),
                 ]);
