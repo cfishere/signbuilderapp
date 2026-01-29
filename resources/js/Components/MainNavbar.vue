@@ -27,6 +27,20 @@
           >
             My Account
           </Link>
+          <Link
+            href="/account"
+            class="text-gray-600 hover:text-gray-900"
+            v-if="authUser"
+          >
+            My Account
+          </Link>
+          <Link
+            href="/admin/users/create"
+            class="text-gray-600 hover:text-gray-900"
+            v-if="authUser && authUser.is_admin"
+          >
+            Admin Users
+          </Link>
         </div>
       </div>
 
