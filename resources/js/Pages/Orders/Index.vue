@@ -2,26 +2,9 @@
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed, reactive, ref, onMounted, onBeforeUnmount } from 'vue';
-import axios from 'axios';
-import { fabric } from '@/utils/fabricRef';
-import { rehydrateTextOnPath } from '@/utils/textOnPath';
-import { ensureFontLoaded } from '@/utils/fontLoader';
-import { FONT_CATALOG } from '@/utils/fonts';
 
 const page = usePage();
 const orders = computed(() => page.props.orders);
-const isAdmin = computed(() => !!page.props.auth?.user?.is_admin);
-
-const printState = reactive<{
-  loading: Record<number, boolean>;
-  error: Record<number, string>;
-  url: Record<number, string>;
-}>({
-  loading: {},
-  error: {},
-  url: {},
-});
-
 const previewModal = reactive<{
   open: boolean;
   src: string;
@@ -79,115 +62,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
 });
 
-async function loadFontsForCanvasObjects(objects: any[]) {
-  const fontFamilies = new Set<string>();
-  objects.forEach((obj) => {
-    if (obj?.fontFamily) fontFamilies.add(String(obj.fontFamily));
-    if (Array.isArray(obj?._objects)) {
-      obj._objects.forEach((child: any) => {
-        if (child?.fontFamily) fontFamilies.add(String(child.fontFamily));
-      });
-    }
-  });
-
-  const tasks: Promise<void>[] = [];
-  fontFamilies.forEach((family) => {
-    const entry = FONT_CATALOG.find(f => f.family === family);
-    if (entry) {
-      tasks.push(ensureFontLoaded(entry));
-    }
-  });
-  if (tasks.length) {
-    await Promise.all(tasks);
-  }
-}
-
-async function generatePrintImage(order: any) {
-  if (!order?.design_id) {
-    printState.error[order.id] = 'Missing design for this order.';
-    return;
-  }
-
-  printState.loading[order.id] = true;
-  printState.error[order.id] = '';
-
-  try {
-    const { data: design } = await axios.get(`/api/designs/${order.design_id}`);
-
-    const widthIn = Number(design.sign_width);
-    const heightIn = Number(design.sign_height);
-    if (!Number.isFinite(widthIn) || !Number.isFinite(heightIn)) {
-      throw new Error('Missing design dimensions.');
-    }
-
-    const ppi = 300;
-    const widthPx = Math.max(1, Math.round(widthIn * ppi));
-    const heightPx = Math.max(1, Math.round(heightIn * ppi));
-
-    const canvasEl = document.createElement('canvas');
-    canvasEl.width = widthPx;
-    canvasEl.height = heightPx;
-
-    const c = new fabric.StaticCanvas(canvasEl, {
-      backgroundColor: design.background_color || '#ffffff',
-      enableRetinaScaling: false,
-      renderOnAddRemove: false,
-    });
-
-    const loadResult = c.loadFromJSON(design.canvas_state);
-    if (loadResult && typeof (loadResult as Promise<any>).then === 'function') {
-      await loadResult;
-    }
-
-    const objects = c.getObjects();
-    objects.forEach((obj: any) => {
-      if (obj?.isGrid || obj?.name === 'grid' || obj?.isFaceRetainer || obj?.name === 'face-retainer') {
-        obj.visible = false;
-      }
-      if (obj?.data?.kind === 'text-on-path') {
-        rehydrateTextOnPath(obj);
-      }
-    });
-
-    const baseW = Number(design.canvas_width) || widthPx;
-    const baseH = Number(design.canvas_height) || heightPx;
-    const scaleX = widthPx / baseW;
-    const scaleY = heightPx / baseH;
-
-    if (Number.isFinite(scaleX) && Number.isFinite(scaleY)) {
-      objects.forEach((obj: any) => {
-        obj.scaleX = (obj.scaleX || 1) * scaleX;
-        obj.scaleY = (obj.scaleY || 1) * scaleY;
-        obj.left = (obj.left || 0) * scaleX;
-        obj.top = (obj.top || 0) * scaleY;
-        obj.setCoords?.();
-      });
-    }
-
-    await loadFontsForCanvasObjects(objects);
-
-    c.renderAll();
-
-    const dataUrl = c.toDataURL({
-      format: 'png',
-      multiplier: 1,
-    });
-
-    const { data } = await axios.post(`/api/orders/${order.id}/jobs/print-image`, {
-      print_image_data: dataUrl,
-      print_image_ppi: 300,
-      print_image_width: widthPx,
-      print_image_height: heightPx,
-    });
-
-    printState.url[order.id] = data.print_image_url;
-  } catch (err: any) {
-    const message = err?.response?.data?.message || err?.message || 'Unable to generate print image.';
-    printState.error[order.id] = message;
-  } finally {
-    printState.loading[order.id] = false;
-  }
-}
 </script>
 
 <template>
@@ -262,28 +136,6 @@ async function generatePrintImage(order: any) {
                   >
                     View
                   </Link>
-                  <button
-                    v-if="isAdmin"
-                    type="button"
-                    class="inline-flex items-center rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
-                    :disabled="printState.loading[order.id]"
-                    @click="generatePrintImage(order)"
-                  >
-                    {{ printState.loading[order.id] ? 'Generating…' : 'Generate Hi-Res' }}
-                  </button>
-                </div>
-                <div v-if="isAdmin && (printState.error[order.id] || order.print_image_url || printState.url[order.id])" class="mt-1 text-[11px] text-gray-500">
-                  <span v-if="printState.error[order.id]" class="text-red-600">{{ printState.error[order.id] }}</span>
-                  <span v-else>
-                    <a
-                      :href="printState.url[order.id] || order.print_image_url"
-                      class="underline"
-                      target="_blank"
-                      rel="noopener"
-                    >
-                      Download
-                    </a>
-                  </span>
                 </div>
               </td>
             </tr>

@@ -21,5 +21,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(PriceRuleSeeder::class);
+        $this->call(AddOnProductSeeder::class);
     }
 }

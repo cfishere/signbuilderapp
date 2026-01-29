@@ -11,6 +11,9 @@ use App\Http\Controllers\DesignIndexController;
 use App\Http\Controllers\OrderIndexController;
 use App\Http\Controllers\OrderShowController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AddOnProductController;
+use App\Http\Controllers\Admin\AdminDesignIndexController;
+use App\Http\Controllers\Admin\AdminOrderIndexController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -40,8 +43,12 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
+    Route::inertia('/', 'Admin/Dashboard')->name('admin.dashboard');
     Route::get('/users/create', [AdminUserController::class, 'create'])->name('admin.users.create');
     Route::post('/users', [AdminUserController::class, 'store'])->name('admin.users.store');
+    Route::get('/add-ons', [AddOnProductController::class, 'index'])->name('admin.add-ons.index');
+    Route::get('/designs', [AdminDesignIndexController::class, 'index'])->name('admin.designs.index');
+    Route::get('/orders', [AdminOrderIndexController::class, 'index'])->name('admin.orders.index');
 });
 
 Route::middleware(['auth'])->prefix('api')->group(function () {    
