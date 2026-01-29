@@ -1,5 +1,5 @@
 <script setup>
-import AppLayout from '@/Layouts/AppLayout.vue';
+import AdminLayout from '@/Layouts/AdminLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
@@ -23,7 +23,7 @@ function submit() {
 </script>
 
 <template>
-  <AppLayout>
+  <AdminLayout>
     <Head title="Create Admin User" />
 
     <div class="max-w-xl mx-auto py-8">
@@ -88,5 +88,5 @@ function submit() {
         </div>
       </form>
     </div>
-  </AppLayout>
+  </AdminLayout>
 </template>
