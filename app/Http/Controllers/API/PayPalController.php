@@ -4,6 +4,8 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Mail\OrderPaidMail;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -99,8 +101,9 @@ class PayPalController extends Controller
             return response()->json(['message' => 'PayPal auth failed.'], 502);
         }
 
+        // PayPal expects a JSON object body; send an explicit empty object
         $response = Http::withToken($accessToken)
-            ->post($this->baseUrl() . "/v2/checkout/orders/{$paypalOrderId}/capture");
+            ->post($this->baseUrl() . "/v2/checkout/orders/{$paypalOrderId}/capture", (object) []);
 
         if (!$response->successful()) {
             return response()->json([
@@ -112,6 +115,8 @@ class PayPalController extends Controller
         $data = $response->json();
         $capture = $data['purchase_units'][0]['payments']['captures'][0] ?? [];
 
+        $wasPaid = $order->paid_at;
+
         $order->paypal_order_id = $paypalOrderId;
         $order->paypal_capture_id = $capture['id'] ?? $order->paypal_capture_id;
         $order->paypal_payer_id = $data['payer']['payer_id'] ?? $order->paypal_payer_id;
@@ -122,6 +127,30 @@ class PayPalController extends Controller
             'paypal_capture' => $data,
         ]);
         $order->save();
+
+        if (!$wasPaid && $order->user) {
+            $design = $order->designs()->latest()->first();
+            $product = $order->metadata['sign_type'] ?? $design?->sign_type ?? 'Custom Sign';
+            $dimensions = '-';
+            if ($design?->sign_width && $design?->sign_height) {
+                $dimensions = $design->sign_width . ' x ' . $design->sign_height . ' in';
+            }
+
+            $price = $order->total_amount != null
+                ? '$' . number_format((float) $order->total_amount, 2)
+                : '$0.00';
+
+            $orderUrl = url('/orders/' . $order->id);
+            Mail::to($order->user->email)->send(new OrderPaidMail([
+                'order_number' => $order->order_number ?? $order->id,
+                'product' => $product,
+                'price' => $price,
+                'status' => 'Paid',
+                'dimensions' => $dimensions,
+                'addons' => 'None',
+                'order_url' => $orderUrl,
+            ]));
+        }
 
         return response()->json($order);
     }

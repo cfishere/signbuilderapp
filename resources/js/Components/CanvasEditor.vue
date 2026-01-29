@@ -1,5 +1,31 @@
 <template>
   <div class="w-full min-h-screen bg-white">
+    <div
+      v-if="!isSignTypeSelected"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Select sign type"
+    >
+      <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+        <h2 class="text-xl font-semibold text-slate-900">Select a sign type to begin</h2>
+        <p class="mt-2 text-sm text-slate-600">
+          This choice sets your available templates and sizing rules. You can
+          change it only by refreshing the page.
+        </p>
+        <div class="mt-4 grid max-h-72 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2">
+          <button
+            v-for="opt in signTypeChoices"
+            :key="opt.value"
+            type="button"
+            class="rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:bg-emerald-50"
+            @click="selectSignType(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+    </div>
 
     <header class="max-w-[1400px] mx-auto px-4">
       <div class="grid grid-cols-12 gap-4 pt-6">
@@ -38,6 +64,13 @@
 
                <!-- Settings panel -->
    <!--  <aside class="p-4 space-y-4 bg-white border-r w-80 shrink-0"> -->
+      <div class="mb-3 text-center">
+        <div class="text-xs uppercase tracking-wide text-gray-500">Estimate</div>
+        <div class="text-lg font-semibold text-emerald-700">
+          {{ formatCurrency(estimatePrice) }}
+        </div>
+      </div>
+
       <h2 class="mb-2 text-lg font-semibold text-center">Design Settings</h2>
 
       <!-- Sign Type -->
@@ -46,6 +79,7 @@
         <select
           v-model="signType"
           class="w-full p-2 mt-2 border rounded disabled:bg-gray-100 disabled:text-gray-500"
+          :class="{ 'ring-2 ring-emerald-500': !isSignTypeSelected }"
           aria-label="Sign type"
           :disabled="isSignTypeLocked"
         >
@@ -53,6 +87,9 @@
             {{ opt.label }}
           </option>
         </select>
+        <p v-if="!isSignTypeSelected" class="mt-2 text-xs font-medium text-emerald-700">
+          Select a sign type to unlock the canvas.
+        </p>
       </label>
 
       <!-- Dimensions -->
@@ -469,6 +506,14 @@ const isChannelLetter = computed(() => {
 
 const isSignTypeSelected = computed(() => !!signType.value)
 const isSignTypeLocked = computed(() => !!signType.value)
+const signTypeChoices = computed(() =>
+  signTypeOptions.value.filter(opt => !!opt.value)
+)
+
+function selectSignType(value: string) {
+  if (!value) return
+  signType.value = value
+}
 
 const CHANNEL_LETTER_DEFAULT_FONT = 'Anton'
 const CHANNEL_LETTER_ALLOWED_FONTS = new Set(
@@ -646,6 +691,22 @@ const activeObj = ref(null);
 const viewport = reactive({ w: 1200, h: 620 }) // updated on mount/resize
 const pad = 40 // screen-pixel padding around the face when fitting
 const hasSelection = ref(false)
+
+const estimatePrice = computed(() => {
+  // Track size changes even while using the static helper for now.
+  const _w = formWidthIn.value;
+  const _h = formHeightIn.value;
+  return getBasePriceForSignType(signType.value);
+})
+
+function formatCurrency(amount: number | null | undefined) {
+  const value = Number.isFinite(amount) ? Number(amount) : 0;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 /*type SelectionKind =
   | 'none'
@@ -3300,11 +3361,24 @@ async function saveDesign() {
 function captureOrderPreviewJpeg() {
   const c = fabricCanvas.value;
   if (!c) return null;
-  return c.toDataURL({
+  const hidden: fabric.Object[] = [];
+  c.getObjects().forEach((obj: any) => {
+    if (obj?.isGrid || obj?.name === 'grid') {
+      if (obj.visible !== false) {
+        obj.visible = false;
+        hidden.push(obj);
+      }
+    }
+  });
+  c.requestRenderAll();
+  const data = c.toDataURL({
     format: 'jpeg',
     quality: 0.9,
     multiplier: 1,
   });
+  hidden.forEach(obj => { obj.visible = true; });
+  c.requestRenderAll();
+  return data;
 }
 
 async function orderSign() {
