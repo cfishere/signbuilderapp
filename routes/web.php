@@ -5,6 +5,8 @@ use App\Http\Controllers\DashboardController; //recommended to add per chatgtp. 
 use App\Http\Controllers\API\DesignController;
 use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\PayPalController;
+use App\Http\Controllers\API\JobController;
+use App\Http\Controllers\API\OrderAbandonedController;
 use App\Http\Controllers\DesignIndexController;
 use App\Http\Controllers\OrderIndexController;
 use App\Http\Controllers\OrderShowController;
@@ -15,19 +17,20 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Artisan;
 
-Route::inertia('/', 'GetStarted')->name('getstarted');
-
-/*Route::inertia('/canvas', 'Canvas')->name('canvas.get');*/
-Route::get('/canvas', function (Request $request) {
-    return Inertia::render('CanvasPage', [           
-        'designId' => $request->query('design_id')
-            ? (int) $request->query('design_id')
-            : null,
-        'signType' => $request->query('sign_type') ?? $request->query('signType'),
-    ]);
-})->name('canvas.get');
+Route::inertia('/', 'Home')->name('home');
+Route::inertia('/get-started', 'GetStarted')->name('getstarted');
 
 Route::middleware(['auth'])->group(function () {
+    /*Route::inertia('/canvas', 'Canvas')->name('canvas.get');*/
+    Route::get('/canvas', function (Request $request) {
+        return Inertia::render('CanvasPage', [
+            'designId' => $request->query('design_id')
+                ? (int) $request->query('design_id')
+                : null,
+            'signType' => $request->query('sign_type') ?? $request->query('signType'),
+        ]);
+    })->name('canvas.get');
+
     Route::get('/account', function () {
         return Inertia::render('Account');
     })->name('account.index');
@@ -55,6 +58,8 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 
     Route::post('/orders/{order}/paypal/create', [PayPalController::class, 'create'])->name('orders.paypal.create');
     Route::post('/orders/{order}/paypal/capture', [PayPalController::class, 'capture'])->name('orders.paypal.capture');
+    Route::post('/orders/{order}/jobs/print-image', [JobController::class, 'storePrintImage'])->name('orders.jobs.print-image');
+    Route::post('/orders/{order}/abandoned', [OrderAbandonedController::class, 'store'])->name('orders.abandoned');
 });
 
 //AUTH ROUTES

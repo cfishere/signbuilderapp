@@ -1,5 +1,5 @@
 <template>
-  <header class="border-b bg-white/80 backdrop-blur">
+  <header class="border-b bg-white/80 backdrop-blur print:hidden">
     <nav class="flex items-center justify-between px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
       <!-- Left: Brand / Home -->
       <div class="flex items-center gap-3">

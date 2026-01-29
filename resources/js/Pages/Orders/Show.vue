@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/Layouts/AppLayout.vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import { getBasePriceForSignType } from '@/utils/pricing';
 
@@ -14,6 +14,11 @@ declare global {
 const page = usePage();
 const order = ref(page.props.order);
 const paypalClientId = page.props.paypal_client_id as string | null;
+const isAdmin = computed(() => !!page.props.auth?.user?.is_admin);
+const isPaid = computed(() => {
+  const status = String(order.value?.status || '').toLowerCase();
+  return status === 'paid' || status === 'completed';
+});
 const form = ref({
   customer_name: order.value.customer_name || '',
   address_line1: order.value.address_line1 || '',
@@ -37,6 +42,10 @@ const isPaying = ref(false);
 function canRenderPayPal() {
   const status = String(order.value?.status || '').toLowerCase();
   return status !== 'paid' && status !== 'completed';
+}
+
+function printOrder() {
+  window.print();
 }
 
 function loadPayPalSdk() {
@@ -121,6 +130,16 @@ async function renderPayPalButtons() {
     onError: (err: any) => {
       console.error('[PayPal] Error', err);
       paypalStatus.value = 'Payment failed. Please try again.';
+      axios.post(`/api/orders/${order.value.id}/abandoned`, {
+        reason: 'paypal_error',
+      }).catch(() => {});
+      isPaying.value = false;
+    },
+    onCancel: () => {
+      paypalStatus.value = 'Payment was not completed.';
+      axios.post(`/api/orders/${order.value.id}/abandoned`, {
+        reason: 'paypal_cancel',
+      }).catch(() => {});
       isPaying.value = false;
     },
   }).render(paypalContainer.value);
@@ -182,23 +201,41 @@ async function submitCustomerInfo() {
 <template>
   <AppLayout>
     <div class="max-w-4xl mx-auto py-8">
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-6 print:hidden">
         <div>
           <div class="text-xs uppercase tracking-wide text-gray-500">Order</div>
           <h1 class="text-2xl font-semibold">
             {{ order.order_number || `Order #${order.id}` }}
           </h1>
         </div>
-        <Link
-          href="/orders"
-          class="inline-flex items-center rounded-md border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
-        >
-          Back to Orders
-        </Link>
+        <div class="flex items-center gap-2">
+          <a
+            v-if="order.preview_image_url"
+            :href="order.preview_image_url"
+            class="inline-flex items-center rounded-md border border-slate-400 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            target="_blank"
+            rel="noopener"
+          >
+            Download Preview
+          </a>
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md border border-slate-400 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            @click="printOrder"
+          >
+            Print
+          </button>
+          <Link
+            href="/orders"
+            class="inline-flex items-center rounded-md border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            Back to Orders
+          </Link>
+        </div>
       </div>
 
       <div class="grid gap-6 md:grid-cols-[2fr,1fr]">
-        <div class="rounded-lg border bg-white/80 p-4">
+        <div class="rounded-lg border bg-white/80 p-4 print:border-none print:bg-white">
           <div class="text-sm font-semibold mb-2">Preview</div>
           <div
             v-if="order.preview_image_url"
@@ -207,8 +244,11 @@ async function submitCustomerInfo() {
             <img
               :src="order.preview_image_url"
               alt="Order preview"
-              class="w-full h-auto rounded"
+              class="w-full h-auto rounded mb-5"
             />
+            <div class="text-center text-xs text-gray-500">
+              Low Resolution Preview Image
+            </div>
           </div>
           <div v-else class="text-xs text-gray-500">
             No preview image saved yet.
@@ -224,8 +264,9 @@ async function submitCustomerInfo() {
                 <input
                   v-model="form.customer_name"
                   type="text"
-                  class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                   required
+                  :disabled="!isAdmin && isPaid"
                 />
                 <div v-if="errors.customer_name" class="text-xs text-red-600">{{ errors.customer_name }}</div>
               </div>
@@ -234,8 +275,9 @@ async function submitCustomerInfo() {
                 <input
                   v-model="form.address_line1"
                   type="text"
-                  class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                   required
+                  :disabled="!isAdmin && isPaid"
                 />
                 <div v-if="errors.address_line1" class="text-xs text-red-600">{{ errors.address_line1 }}</div>
               </div>
@@ -244,7 +286,8 @@ async function submitCustomerInfo() {
                 <input
                   v-model="form.address_line2"
                   type="text"
-                  class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  :disabled="!isAdmin && isPaid"
                 />
               </div>
               <div class="grid grid-cols-2 gap-2">
@@ -253,8 +296,9 @@ async function submitCustomerInfo() {
                   <input
                     v-model="form.city"
                     type="text"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                     required
+                    :disabled="!isAdmin && isPaid"
                   />
                   <div v-if="errors.city" class="text-xs text-red-600">{{ errors.city }}</div>
                 </div>
@@ -263,8 +307,9 @@ async function submitCustomerInfo() {
                   <input
                     v-model="form.region"
                     type="text"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                     required
+                    :disabled="!isAdmin && isPaid"
                   />
                   <div v-if="errors.region" class="text-xs text-red-600">{{ errors.region }}</div>
                 </div>
@@ -275,8 +320,9 @@ async function submitCustomerInfo() {
                   <input
                     v-model="form.postal_code"
                     type="text"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                     required
+                    :disabled="!isAdmin && isPaid"
                   />
                   <div v-if="errors.postal_code" class="text-xs text-red-600">{{ errors.postal_code }}</div>
                 </div>
@@ -285,7 +331,8 @@ async function submitCustomerInfo() {
                   <input
                     v-model="form.country"
                     type="text"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                    :disabled="!isAdmin && isPaid"
                   />
                 </div>
               </div>
@@ -293,7 +340,8 @@ async function submitCustomerInfo() {
                 <label class="text-xs uppercase text-gray-400">Delivery Method</label>
                 <select
                   v-model="form.delivery_method"
-                  class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  :disabled="!isAdmin && isPaid"
                 >
                   <option value="">Select...</option>
                   <option value="Freight">Freight</option>
@@ -312,8 +360,9 @@ async function submitCustomerInfo() {
                     type="number"
                     step="0.01"
                     min="0"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                     placeholder="0.00"
+                    :disabled="!isAdmin && isPaid"
                   />
                   <div v-if="errors.total_amount" class="text-xs text-red-600">{{ errors.total_amount }}</div>
                 </div>
@@ -322,7 +371,8 @@ async function submitCustomerInfo() {
                   <input
                     v-model="form.currency"
                     type="text"
-                    class="mt-1 w-full rounded border px-2 py-1 text-sm uppercase"
+                    class="mt-1 w-full rounded border px-2 py-1 text-sm uppercase disabled:bg-gray-100 disabled:text-gray-500"
+                    :disabled="!isAdmin && isPaid"
                   />
                 </div>
               </div>
@@ -342,8 +392,9 @@ async function submitCustomerInfo() {
                 <span class="text-xs uppercase text-gray-400">Notes</span>
                 <div class="whitespace-pre-line">{{ order.notes || '-' }}</div>
               </div>
-              <div class="flex items-center gap-2 pt-2">
+              <div class="flex items-center gap-2 pt-2 print:hidden">
                 <button
+                  v-if="isAdmin || !isPaid"
                   type="submit"
                   class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
                   :disabled="isSaving"
@@ -355,7 +406,7 @@ async function submitCustomerInfo() {
             </form>
           </div>
 
-          <div class="rounded-lg border bg-white/80 p-4">
+          <div class="rounded-lg border bg-white/80 p-4 print:hidden">
             <div class="text-sm font-semibold mb-3">Checkout</div>
             <div class="text-xs text-gray-500 mb-3">
               Total: {{ order.total_amount || '0.00' }} {{ order.currency || 'USD' }}
@@ -364,7 +415,7 @@ async function submitCustomerInfo() {
             <div v-if="!canRenderPayPal()" class="text-xs text-gray-500">
               Payment complete.
             </div>
-            <div v-else ref="paypalContainer"></div>
+            <div v-else-if="isAdmin || !isPaid" ref="paypalContainer"></div>
             <div v-if="paypalStatus" class="text-xs text-gray-500 mt-2">{{ paypalStatus }}</div>
             <div class="mt-3 text-xs text-gray-500">
               Status: {{ order.paypal_status || '-' }} • Paid: {{ order.paid_at || '-' }}
@@ -373,6 +424,7 @@ async function submitCustomerInfo() {
               Processing payment...
             </div>
           </div>
+
         </div>
       </div>
     </div>
