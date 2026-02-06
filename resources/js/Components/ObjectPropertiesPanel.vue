@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="p-3 border rounded-lg bg-white/80">
     <h3 class="mb-2 text-sm font-semibold">Object Properties</h3>
 
@@ -15,7 +15,7 @@
       <!-- COMMON APPEARANCE: Fill / Stroke -->
       <div class="grid grid-cols-1 gap-3 mb-3">
         <!-- Fill -->
-        <div>
+        <div v-if="kind !== 'line'">
           <label class="block text-xs font-medium">Fill</label>
           <div class="flex items-center gap-2 mt-1">
             <input
@@ -35,7 +35,7 @@
         </div>
 
         <!-- Stroke Color -->
-        <div>
+        <div v-if="kind !== 'line'">
           <label class="block text-xs font-medium">Stroke</label>
           <div class="flex items-center gap-2 mt-1">
             <input
@@ -55,7 +55,7 @@
         </div>
 
         <!-- Stroke Width -->
-        <div>
+        <div v-if="kind !== 'line'">
           <label class="block text-xs font-medium">Stroke Width</label>
           <div class="flex items-center gap-2 mt-1">
             <input
@@ -106,7 +106,7 @@
 
 <!-- GRADIENT FILL (text + shapes) -->
 <section
-  v-if="gradientSupported"
+  v-if="gradientSupported && kind !== 'line'"
   class="mt-4 border-t pt-3"
 >
   <h4 class="mb-2 text-xs font-semibold">Gradient Fill</h4>
@@ -151,9 +151,9 @@
         v-model="gradientUI.direction"
         @change="applyGradientFill"
       >
-        <option value="horizontal">Left → Right</option>
-        <option value="vertical">Top → Bottom</option>
-        <option value="diagonal">Top-Left → Bottom-Right</option>
+        <option value="horizontal">Left â†’ Right</option>
+        <option value="vertical">Top â†’ Bottom</option>
+        <option value="diagonal">Top-Left â†’ Bottom-Right</option>
       </select>
     </div>
   </div>
@@ -310,16 +310,56 @@
             Italic
           </label>
         </div>
+
+        <div v-if="kind === 'text'" class="mt-3">
+          <label class="block mb-1 text-xs font-medium">Text Align</label>
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="px-2 py-1 border rounded hover:bg-gray-50"
+              :class="{ 'bg-gray-100 border-gray-400': currentTextAlign === 'left' }"
+              title="Align Left"
+              aria-label="Align Left"
+              @click="onStyleChange({ textAlign: 'left' })"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M4 6h12" />
+                <path d="M4 12h16" />
+                <path d="M4 18h10" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 border rounded hover:bg-gray-50"
+              :class="{ 'bg-gray-100 border-gray-400': currentTextAlign === 'center' }"
+              title="Align Center"
+              aria-label="Align Center"
+              @click="onStyleChange({ textAlign: 'center' })"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M6 6h12" />
+                <path d="M4 12h16" />
+                <path d="M7 18h10" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 border rounded hover:bg-gray-50"
+              :class="{ 'bg-gray-100 border-gray-400': currentTextAlign === 'right' }"
+              title="Align Right"
+              aria-label="Align Right"
+              @click="onStyleChange({ textAlign: 'right' })"
+            >
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M8 6h12" />
+                <path d="M4 12h16" />
+                <path d="M10 18h10" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
 
-      <!-- PATH-TEXT EXTRA HINT -->
-      <p
-        v-if="kind === 'text-on-path'"
-        class="mt-3 text-[11px] text-gray-500 italic"
-      >
-        Tip: use the Text-on-Path tools to adjust path shape, alignment, and flipping.
-        Use this properties panel for color, stroke, and font styling.
-      </p>
       <!-- TEXT-ON-PATH EXTRAS -->
 <section
   v-if="kind === 'text-on-path'"
@@ -437,23 +477,6 @@
       <span class="text-xs">Show path</span>
     </label>
   </div>
-
-  <!-- Apply to Selection -->
-  <div class="flex flex-wrap gap-2 mt-4">
-    <button
-      type="button"
-      class="px-3 py-1 text-xs border rounded hover:bg-gray-50 disabled:opacity-50"
-      :disabled="!hasSelection"
-      @click="emit('path-text-apply', buildPathPayload())"
-    >
-      Apply to Selection
-    </button>
-  </div>
-
-  <p class="mt-2 text-[11px] text-gray-500">
-    Tip: Adjust path, spacing, and offset here, then click “Apply to Selection”
-    with a Text-on-Path group selected.
-  </p>
 </section>
 
     </div>
@@ -479,6 +502,7 @@ const props = defineProps<{
     fontSize?: number | null
     fontWeight?: string | null
     fontStyle?: string | null
+    textAlign?: 'left' | 'center' | 'right' | string | null
     shadow?: {
       color?: string
       blur?: number
@@ -505,6 +529,10 @@ const kindLabelMap: Record<string, string> = {
 }
 
 const kindLabel = computed(() => kindLabelMap[props.kind] ?? 'Object')
+const currentTextAlign = computed(() => {
+  const value = props.styleState.textAlign
+  return value === 'center' || value === 'right' ? value : 'left'
+})
 
 const opacityPercent = computed(() => {
   const raw = typeof props.styleState.opacity === 'number' ? props.styleState.opacity : 1
@@ -531,7 +559,7 @@ const PRESETS = [
   { label: 'Arc Up',   value: 'arcUp',   d: 'M 0 150 Q 150 0 300 150' },
   { label: 'Arc Down', value: 'arcDown', d: 'M 0 0 Q 150 150 300 0' },
   { label: 'Wave',     value: 'wave',    d: 'M 0 100 C 50 0, 100 200, 150 100 S 250 0, 300 100' },
-  { label: 'Custom…',  value: 'custom',  d: 'M 50 150 Q 150 50 250 150' }
+  { label: 'Customâ€¦',  value: 'custom',  d: 'M 50 150 Q 150 50 250 150' }
 ] as const
 
 // Local UI for path text controls
@@ -658,7 +686,6 @@ function applyGradientFill() {
 const emit = defineEmits<{
   (e: 'change-style', patch: Record<string, any>): void
   (e: 'path-text-change', payload: any): void
-  (e: 'path-text-apply', payload: any): void  
 }>()
 
 function onStyleChange(patch: Record<string, any>) {
