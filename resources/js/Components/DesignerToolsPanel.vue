@@ -71,14 +71,20 @@
 
   <!-- Copy -->
   <symbol id="i-copy" viewBox="0 0 24 24">
-    <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
-    <rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+    <rect x="4" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+    <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/>
   </symbol>
 
   <!-- Paste -->
   <symbol id="i-paste" viewBox="0 0 24 24">
-    <rect x="4" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
-    <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/>
+    <rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+    <rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+
+  <!-- Select All -->
+  <symbol id="i-select-all" viewBox="0 0 24 24">
+    <rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2" stroke-dasharray="3 2"/>
+    <path d="M9 12l2.5 2.5L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
   </symbol>
 
   <!-- Add Text -->
@@ -96,12 +102,6 @@
     <path d="M12 6v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   </symbol>
 
-  <!-- Edit Stroke -->
-  <symbol id="i-edit-stroke" viewBox="0 0 24 24">
-    <path d="M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    <path d="M14 6l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    <path d="M12 8l-2 6 6-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  </symbol>
 
   <!-- Undo -->
   <symbol id="i-undo" viewBox="0 0 24 24">
@@ -133,6 +133,47 @@
   <!-- Shapes: Rectangle -->
   <symbol id="i-shape-rect" viewBox="0 0 24 24">
     <rect x="5" y="7" width="14" height="10" rx="2" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+
+  <!-- Shapes: Rounded Rectangle -->
+  <symbol id="i-shape-rounded-rect" viewBox="0 0 24 24">
+    <rect x="5" y="7" width="14" height="10" rx="3" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+
+  <!-- Shapes: Triangle (equilateral) -->
+  <symbol id="i-shape-triangle" viewBox="0 0 24 24">
+    <path d="M12 5L20 19H4L12 5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- Shapes: Star -->
+  <symbol id="i-shape-star" viewBox="0 0 24 24">
+    <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.2 1 5.9L12 16.9 6.8 19.8l1-5.9-4.3-4.2 5.9-.9L12 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- Shapes: Octagon -->
+  <symbol id="i-shape-octagon" viewBox="0 0 24 24">
+    <path d="M8 3h8l3 3v8l-3 3H8l-3-3V6l3-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- Shapes: Heart -->
+  <symbol id="i-shape-heart" viewBox="0 0 24 24">
+    <path d="M12 20s-7-4.4-9-8.6C1.8 8.1 4 5 7.2 5c2 0 3.4 1.1 4.8 2.8C13.4 6.1 14.8 5 16.8 5c3.2 0 5.4 3.1 4.2 6.4C19 15.6 12 20 12 20Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- Flip Horizontal -->
+  <symbol id="i-flip-horizontal" viewBox="0 0 24 24">
+    <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <path d="M7 8l-3 4 3 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 8l3 4-3 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- Flip Vertical -->
+  <symbol id="i-flip-vertical" viewBox="0 0 24 24">
+    <g transform="rotate(90 12 12)">
+      <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M7 8l-3 4 3 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M17 8l3 4-3 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
   </symbol>
 
   <!-- Shapes: Circle -->
@@ -211,6 +252,10 @@
         <svg class="tool-icon" aria-hidden="true"><use href="#i-paste" /></svg>
       </button>
 
+      <button type="button" class="tool-btn" title="Select All" aria-label="Select All" @click="$emit('select-all')">
+        <svg class="tool-icon" aria-hidden="true"><use href="#i-select-all" /></svg>
+      </button>
+
       <button type="button" class="tool-btn" title="Delete" aria-label="Delete" @click="$emit('delete-selected')">
         <svg class="tool-icon" aria-hidden="true"><use href="#i-delete" /></svg>
       </button>
@@ -223,11 +268,23 @@
           <button type="button" class="tool-btn" title="Rectangle" aria-label="Rectangle" @click="emitAndClose($event, 'add-rectangle')">
             <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-rect" /></svg>
           </button>
+          <button type="button" class="tool-btn" title="Rounded Rectangle" aria-label="Rounded Rectangle" @click="emitAndClose($event, 'add-rounded-rect')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-rounded-rect" /></svg>
+          </button>
+          <button type="button" class="tool-btn" title="Triangle" aria-label="Triangle" @click="emitAndClose($event, 'add-triangle')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-triangle" /></svg>
+          </button>
+          <button type="button" class="tool-btn" title="Star" aria-label="Star" @click="emitAndClose($event, 'add-star')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-star" /></svg>
+          </button>
+          <button type="button" class="tool-btn" title="Octagon" aria-label="Octagon" @click="emitAndClose($event, 'add-octagon')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-octagon" /></svg>
+          </button>
+          <button type="button" class="tool-btn" title="Heart" aria-label="Heart" @click="emitAndClose($event, 'add-heart')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-heart" /></svg>
+          </button>
           <button type="button" class="tool-btn" title="Circle" aria-label="Circle" @click="emitAndClose($event, 'add-circle')">
             <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-circle" /></svg>
-          </button>
-          <button type="button" class="tool-btn" title="Line" aria-label="Line" @click="emitAndClose($event, 'start-line-tool')">
-            <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-line" /></svg>
           </button>
         </div>
       </details>
@@ -284,6 +341,20 @@
         <svg class="tool-icon" aria-hidden="true"><use href="#i-send-back" /></svg>
       </button>
 
+      <details class="tool-menu">
+        <summary class="tool-btn" title="Flip" aria-label="Flip">
+          <svg class="tool-icon" aria-hidden="true"><use href="#i-flip-horizontal" /></svg>
+        </summary>
+        <div class="tool-menu-panel">
+          <button type="button" class="tool-btn" title="Flip Horizontal" aria-label="Flip Horizontal" @click="emitAndClose($event, 'flip-horizontal')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-flip-horizontal" /></svg>
+          </button>
+          <button type="button" class="tool-btn" title="Flip Vertical" aria-label="Flip Vertical" @click="emitAndClose($event, 'flip-vertical')">
+            <svg class="tool-icon" aria-hidden="true"><use href="#i-flip-vertical" /></svg>
+          </button>
+        </div>
+      </details>
+
       <button type="button" class="tool-btn" title="Group" aria-label="Group" @click="$emit('group')">
         <svg class="tool-icon" aria-hidden="true"><use href="#i-group" /></svg>
       </button>
@@ -292,8 +363,8 @@
         <svg class="tool-icon" aria-hidden="true"><use href="#i-ungroup" /></svg>
       </button>
 
-      <button type="button" class="tool-btn" title="Edit Stroke" aria-label="Edit Stroke" @click="$emit('edit-stroke')">
-        <svg class="tool-icon" aria-hidden="true"><use href="#i-edit-stroke" /></svg>
+      <button type="button" class="tool-btn" title="Line" aria-label="Line" @click="$emit('start-line-tool')">
+        <svg class="tool-icon" aria-hidden="true"><use href="#i-shape-line" /></svg>
       </button>
     </div>
 
@@ -341,10 +412,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits([
-  'add-text','add-curved-text','add-rectangle','add-circle','upload-image','bring-to-front','send-to-back',
+  'add-text','add-curved-text','add-rectangle','add-rounded-rect','add-triangle','add-star','add-octagon','add-heart','add-circle','upload-image','bring-to-front','send-to-back',
   'delete-selected','align-left','align-center','align-right','align-top','align-middle',
-  'align-bottom','group','ungroup','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool','undo','redo',
-  'copy','paste','edit-stroke'
+  'align-bottom','group','ungroup','flip-horizontal','flip-vertical','toggle-snap','file-upload','toggle-grid','fonts','start-line-tool','undo','redo',
+  'copy','paste','select-all'
 ])
 
 const fileInput = ref<HTMLInputElement | null>(null)

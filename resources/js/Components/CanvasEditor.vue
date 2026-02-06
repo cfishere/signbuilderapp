@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="w-full min-h-screen bg-white">
     <div
       v-if="!isSignTypeSelected"
@@ -7,18 +7,18 @@
       aria-modal="true"
       aria-label="Select sign type"
     >
-      <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+      <div class="w-full max-w-xl p-6 bg-white shadow-xl rounded-2xl">
         <h2 class="text-xl font-semibold text-slate-900">Select a sign type to begin</h2>
         <p class="mt-2 text-sm text-slate-600">
           This choice sets your available templates and sizing rules. You can
           change it only by refreshing the page.
         </p>
-        <div class="mt-4 grid max-h-72 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2">
+        <div class="grid grid-cols-1 gap-2 mt-4 overflow-auto max-h-72 sm:grid-cols-2">
           <button
             v-for="opt in signTypeChoices"
             :key="opt.value"
             type="button"
-            class="rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:border-emerald-400 hover:bg-emerald-50"
+            class="px-3 py-2 text-sm font-medium text-left transition border rounded-lg border-slate-200 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50"
             @click="selectSignType(opt.value)"
           >
             {{ opt.label }}
@@ -65,7 +65,7 @@
                <!-- Settings panel -->
    <!--  <aside class="p-4 space-y-4 bg-white border-r w-80 shrink-0"> -->
       <div class="mb-3 text-center">
-        <div class="text-xs uppercase tracking-wide text-gray-500">Estimate</div>
+        <div class="text-xs tracking-wide text-gray-500 uppercase">Estimate</div>
         <div class="text-lg font-semibold text-emerald-700">
           {{ formatCurrency(estimatePrice) }}
         </div>
@@ -138,8 +138,10 @@
       <input
         type="color"
         v-model="backgroundColor"
-        class="h-10 border rounded cursor-pointer w-14"
+        class="h-10 w-14 border rounded cursor-pointer"
+        style="min-width: 2.25rem;"
         aria-label="Canvas background color"
+        @input="onBackgroundColorPreview"
         @change="onBackgroundColorCommit"
       />
       <input
@@ -149,6 +151,8 @@
         placeholder="#ffffff"
         @change="onBackgroundColorCommit"
       />
+    </div>
+    <div class="flex justify-end">
       <button
         type="button"
         class="px-2 py-1 text-xs border rounded hover:bg-gray-50"
@@ -207,7 +211,6 @@
           @font-family="onChangeFontFamily"
          @change-style="handlePropertiesStyleChange"
         @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
-        @path-text-apply="(opts) => tweakSelectedTextOnPath(opts)"
         />
         <!-- Example toolbar snippet in CanvasEditor.vue -->
         <div class="flex items-center gap-2 mb-3">
@@ -220,7 +223,7 @@
             @click="saveDesign"
           >
             <span v-if="!isSaving">Save Design</span>
-            <span v-else>Saving…</span>
+            <span v-else>Savingâ€¦</span>
           </button>
           <button
             type="button"
@@ -265,11 +268,17 @@
       :can-undo="canUndo"
       :can-redo="canRedo"
       @undo="undoCanvas"
+      @redo="redoCanvas"
       @toggle-snap="(val) => snapToGrid = val"
       @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
       @add-text="addText"
       @add-curved-text="addTextOnPath"
       @add-rectangle="addRectangle"
+      @add-rounded-rect="addRoundedRect"
+      @add-triangle="addTriangle"
+      @add-star="addStar"
+      @add-octagon="addOctagon"
+      @add-heart="addHeart"
       @add-circle="addCircle"
       @start-line-tool="beginLineDrawMode"
       @upload-image="uploadImage"
@@ -284,8 +293,11 @@
       @align-bottom="alignBottom"
       @group="groupObjects"
       @ungroup="ungroupObjects"
+      @flip-horizontal="flipHorizontal"
+      @flip-vertical="flipVertical"
       @copy="copySelection"
       @paste="pasteClipboard"
+      @select-all="selectAllObjects"
       @file-upload="handleFileUpload"
       :fonts="availableFonts"
     />
@@ -310,7 +322,7 @@
       @click="saveDesign"
     >
       <span v-if="!isSaving">{{ currentDesignId ? 'Update Design' : 'Save Design' }}</span>
-      <span v-else>Saving…</span>
+      <span v-else>Savingâ€¦</span>
     </button>
   </div>
 </div>
@@ -319,7 +331,7 @@
   </div>
 
   <!-- Canvas container -->
-  <div ref="stage" class="relative bg-white border rounded-lg">
+  <div ref="stage" id="canvasWrap" class="relative bg-white border rounded-lg">
     <div
       v-if="!isSignTypeSelected"
       class="absolute inset-0 z-10 flex items-center justify-center text-sm font-semibold text-gray-700 bg-white/80"
@@ -380,6 +392,13 @@ import { signTemplates } from '@/templates/signTemplates';
 import { fabric } from '@/utils/fabricRef';
 import { FONT_CATALOG, isAllowedForChannelLetters } from '@/utils/fonts'
 import { getBasePriceForSignType } from '@/utils/pricing'
+
+// Increase serialization precision to avoid scale/position drift after undo/redo
+try {
+  (fabric as any).Object.NUM_FRACTION_DIGITS = 8;
+} catch (_) {
+  // noop
+}
 
 // Guard Fabric toObject/clone against non-iterable additionalProps
 function guardToObject(proto: any) {
@@ -664,6 +683,11 @@ let canvas: fabric.Canvas | null = null;
 const history = ref<any[]>([]);
 const historyIndex = ref(-1);
 let isRestoringHistory = false;
+let historySuspendUntil = 0;
+let historyNeedsOffsetRefresh = false;
+let historyNeedsCoordRefresh = false;
+let lastOffsetSync = 0;
+const HISTORY_EXTRA_PROPS = ['data', 'sbPathMeta'];
 
 const canUndo = computed(() => historyIndex.value > 0);
 const canRedo = computed(
@@ -762,6 +786,7 @@ const styleState = reactive({
   fontSize: 40 as number | null,
   fontWeight: '400' as string | null,
   fontStyle: 'normal' as string | null,
+  textAlign: 'left' as 'left' | 'center' | 'right' | string | null,
 })
 
 interface Design {
@@ -830,7 +855,7 @@ const canSave = computed(() => {
   // or just: return !!fabricCanvas.value;
 });
 
-// 🔹 Helper: super simple toast – replace with your own UI
+// ðŸ”¹ Helper: super simple toast â€“ replace with your own UI
 function showToast(message, type = 'success') {
   // Integrate with your own notification system here
   // For now, keep it dead simple:
@@ -849,19 +874,39 @@ function closeFullSize() {
 }
 
 // Track canvas snapshot history, for undo, redo actions:
+const MAX_HISTORY = 10
+const HISTORY_DEBOUNCE_MS = 120
+const HISTORY_RESTORE_STRATEGY: 'loadFromJSON' | 'enliven' = 'loadFromJSON'
+let historyDebounceTimer: number | null = null
+
 function pushHistorySnapshot(label?: string) {
   const c = fabricCanvas.value || canvas;
-  if (!c || isRestoringHistory) return;
+  if (!c) return;
+  if (isRestoringHistory || Date.now() < historySuspendUntil) return;
 
-  const json = c.toJSON();
-
-  if (historyIndex.value < history.value.length - 1) {
-    history.value = history.value.slice(0, historyIndex.value + 1);
+  if (historyDebounceTimer) {
+    window.clearTimeout(historyDebounceTimer);
   }
 
-  history.value.push(json);
-  historyIndex.value = history.value.length - 1;
+  historyDebounceTimer = window.setTimeout(() => {
+    historyDebounceTimer = null;
+    const json = JSON.stringify(c.toJSON(HISTORY_EXTRA_PROPS));
+    const firstText = c.getObjects()?.find((o: any) => o?.type === 'text' || o?.type === 'i-text' || o?.type === 'textbox');
 
+    if (historyIndex.value < history.value.length - 1) {
+      history.value = history.value.slice(0, historyIndex.value + 1);
+    }
+
+    history.value.push(json);
+    historyIndex.value = history.value.length - 1;
+
+    if (history.value.length > MAX_HISTORY) {
+      const overflow = history.value.length - MAX_HISTORY
+      history.value.splice(0, overflow)
+      historyIndex.value = Math.max(0, historyIndex.value - overflow)
+    }
+
+  }, HISTORY_DEBOUNCE_MS);
 }
 
 function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
@@ -885,6 +930,7 @@ function handleCanvasMouseDown(opt: fabric.IEvent<MouseEvent>) {
   )
 
   canvas.add(activeLine)
+  canvas.requestRenderAll()
   isDrawingLine = true
 }
 
@@ -900,7 +946,7 @@ function handleCanvasMouseMove(opt: fabric.IEvent<MouseEvent>) {
     y2: pointer.y
   })
 
-  canvas.renderAll()
+  canvas.requestRenderAll()
 }
 
 function handleCanvasMouseUp(_opt: fabric.IEvent<MouseEvent>) {
@@ -916,8 +962,10 @@ function handleCanvasMouseUp(_opt: fabric.IEvent<MouseEvent>) {
 
   // Exit line mode after drawing one line.
   currentTool.value = 'none'
+  canvas.selection = true
+  ;(canvas as any).skipTargetFind = false
   canvas.defaultCursor = 'default'
-  canvas.renderAll()
+  canvas.requestRenderAll()
 }
 
 
@@ -930,15 +978,101 @@ function normalizeObjectForEditing(obj: fabric.Object) {
     selectable: true,
     evented: true,
     hasControls: true,
+    hasBorders: true,
     lockScalingX: false,
     lockScalingY: false,
     lockRotation: false,
     lockMovementX: false,
     lockMovementY: false,
+    lockScalingFlip: false,
+    lockSkewingX: false,
+    lockSkewingY: false,
+    cornerSize: 24,
+    touchCornerSize: 24,
   });
 
-  // ensure they use the default control set
-  anyObj.controls = (fabric.Object.prototype as any).controls;
+  const protoControls = (anyObj?.constructor?.prototype?.controls)
+    || (fabric.Object as any)?.prototype?.controls;
+
+  const hasControls = obj.controls && Object.keys(obj.controls).length > 0;
+  if (!hasControls && (fabric.Object as any)?.prototype?.controls) {
+    obj.controls = protoControls;
+  } else if (obj.controls && protoControls) {
+    Object.keys(protoControls).forEach((key) => {
+      const current = (obj.controls as any)[key];
+      const proto = (protoControls as any)[key];
+      if (!current || typeof current.actionHandler !== 'function') {
+        (obj.controls as any)[key] = proto;
+      }
+    });
+  }
+
+  if (typeof (obj as any).setControlsVisibility === 'function') {
+    (obj as any).setControlsVisibility({
+      tl: true,
+      tr: true,
+      bl: true,
+      br: true,
+      ml: true,
+      mt: true,
+      mr: true,
+      mb: true,
+      mtr: true,
+    });
+  }
+
+}
+
+function rehydrateObjectsAfterRestore(c: fabric.Canvas) {
+  const raw = c.getObjects().filter((o: any) => !o?.isGrid && !o?.isFaceRetainer && o?.name !== 'grid' && o?.name !== 'face-retainer');
+  if (!raw.length) return;
+
+  const payloads = raw.map((o: any) => o.toObject(HISTORY_EXTRA_PROPS));
+  raw.forEach((o: any) => c.remove(o));
+
+  fabric.util.enlivenObjects(payloads, (enlivened: any[]) => {
+    enlivened.forEach((obj: any) => {
+      obj.canvas = c;
+      if (Array.isArray(obj._objects)) {
+        obj._objects.forEach((child: any) => { child.canvas = c; });
+      }
+      normalizeObjectForEditing(obj);
+      if (typeof obj.initDimensions === 'function') {
+        obj.initDimensions();
+      }
+      if (typeof obj._setCornerCoords === 'function') {
+        obj._setCornerCoords();
+      }
+      obj.setCoords?.();
+      c.add(obj);
+    });
+    c.requestRenderAll();
+  }, null, fabric);
+}
+
+function ensureObjectsHaveCanvas(c: fabric.Canvas) {
+  if (!c) return;
+  c.getObjects().forEach((obj: any) => {
+    obj.canvas = c;
+    if (Array.isArray(obj._objects)) {
+      obj._objects.forEach((child: any) => { child.canvas = c; });
+    }
+  });
+}
+
+function syncCanvasOffsetIfNeeded(c: fabric.Canvas, force = false) {
+  if (!c) return;
+  const now = Date.now();
+  if (!force && now - lastOffsetSync < 50) return;
+  const rect = c.upperCanvasEl?.getBoundingClientRect?.();
+  const offset = (c as any)?._offset;
+  if (!rect || !offset) return;
+  const dx = Math.abs(rect.left - offset.left);
+  const dy = Math.abs(rect.top - offset.top);
+  if (force || dx > 1 || dy > 1) {
+    c.calcOffset();
+    lastOffsetSync = now;
+  }
 }
 
 // undo/redo: tracking indexed actions
@@ -948,32 +1082,200 @@ function restoreHistoryAt(index: number) {
   if (index < 0 || index >= history.value.length) return;
 
   const json = history.value[index];
+  const payload = typeof json === 'string'
+    ? JSON.parse(json)
+    : JSON.parse(JSON.stringify(json ?? {}));
+
 
   isRestoringHistory = true;
-  c.loadFromJSON(json, () => {
+  historySuspendUntil = Date.now() + 200;
+  historyNeedsOffsetRefresh = true;
+  historyNeedsCoordRefresh = true;
+  const afterRestore = () => {
     c.setViewportTransform([1, 0, 0, 1, 0, 0]);
     c.setZoom(1);
+    c.selection = true;
+    (c as any).skipTargetFind = false;
+    c.defaultCursor = 'default';
+    c.hoverCursor = 'move';
+    c.moveCursor = 'move';
+    (c as any)._currentTransform = null;
+    (c as any)._isDragging = false;
+    (c as any)._groupSelector = null;
+    (c as any)._isCurrentlyDrawing = false;
+    const upper = c.upperCanvasEl as HTMLCanvasElement | undefined;
+    const lower = c.lowerCanvasEl as HTMLCanvasElement | undefined;
+    if (upper) upper.style.pointerEvents = 'auto';
+    if (lower) lower.style.pointerEvents = 'auto';
 
+    c.discardActiveObject();
+    ensureObjectsHaveCanvas(c);
     c.getObjects().forEach((obj: any) => {
       normalizeObjectForEditing(obj);
+      if (typeof obj.setControlsVisibility === 'function') {
+        obj.setControlsVisibility({
+          tl: true,
+          tr: true,
+          bl: true,
+          br: true,
+          ml: true,
+          mt: true,
+          mr: true,
+          mb: true,
+          mtr: true,
+        });
+      }
+      if (typeof obj.initDimensions === 'function') {
+        obj.initDimensions();
+      }
+      if (typeof obj._setCornerCoords === 'function') {
+        obj._setCornerCoords();
+      }
+      obj.setCoords?.();
     });
 
+    syncCanvasOffsetIfNeeded(c, true);
     c.requestRenderAll();
     refreshGrid();
+    ensureGridVisibleSoon();
+    scheduleGridRebuild('history-restore');
+    scheduleFaceRetainerRebuild('history-restore');
+    historyNeedsOffsetRefresh = true;
+    historyNeedsCoordRefresh = true;
+    requestAnimationFrame(() => {
+      isRestoringHistory = false;
+      historySuspendUntil = Date.now() + 200;
+      const candidate = c.getObjects().find((o: any) => !o?.isGrid && !o?.isFaceRetainer && o?.name !== 'grid' && o?.name !== 'face-retainer');
+      if (candidate && candidate.selectable !== false) {
+        syncCanvasOffsetIfNeeded(c, true);
+        c.setActiveObject(candidate);
+        // Rebind canvas references to the live instance (critical for control hit-testing)
+        candidate.canvas = c;
+        if (Array.isArray((candidate as any)._objects)) {
+          (candidate as any)._objects.forEach((child: any) => { child.canvas = c; });
+        }
+        if (typeof (c as any)._calcActiveObjectCoords === 'function') {
+          (c as any)._calcActiveObjectCoords();
+        }
+        if (typeof (candidate as any)._calcCoords === 'function') {
+          (candidate as any)._calcCoords(true);
+        }
+        if (typeof (candidate as any).calcCoords === 'function') {
+          (candidate as any).calcCoords();
+        }
+        candidate.setCoords?.();
+        if (typeof (candidate as any).calcOCoords === 'function') {
+          (candidate as any).oCoords = (candidate as any).calcOCoords();
+        }
+        if (typeof candidate._setCornerCoords === 'function') {
+          candidate._setCornerCoords();
+        }
+        c.requestRenderAll();
+      }
+      c.calcOffset();
+      setTimeout(() => {
+        syncCanvasOffsetIfNeeded(c, true);
+        c.requestRenderAll();
+      }, 0);
+      setTimeout(() => {
+        syncCanvasOffsetIfNeeded(c, true);
+        c.requestRenderAll();
+      }, 120);
+    });
+  };
 
-    isRestoringHistory = false;
+  if (HISTORY_RESTORE_STRATEGY === 'loadFromJSON') {
+  c.loadFromJSON(payload, afterRestore);
+    return;
+  }
+
+  let objectsPayload = Array.isArray(payload?.objects) ? payload.objects : [];
+  if (!objectsPayload.length) {
+    c.loadFromJSON(payload, afterRestore);
+    return;
+  }
+
+  const normalizeFabricType = (type: any) => {
+    if (typeof type !== 'string') return type;
+    const mapped: Record<string, string> = {
+      IText: 'i-text',
+      Textbox: 'textbox',
+      Text: 'text',
+      ActiveSelection: 'activeSelection',
+      Group: 'group',
+      Line: 'line',
+      Rect: 'rect',
+      Circle: 'circle',
+      Ellipse: 'ellipse',
+      Triangle: 'triangle',
+      Polygon: 'polygon',
+      Polyline: 'polyline',
+      Path: 'path',
+      Image: 'image'
+    };
+    if (mapped[type]) return mapped[type];
+    const lower = type.toLowerCase();
+    if (lower === 'itext') return 'i-text';
+    if (lower === 'activeselection') return 'activeSelection';
+    return lower;
+  };
+
+  const normalizeTypesDeep = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return;
+    if (typeof obj.type === 'string') {
+      obj.type = normalizeFabricType(obj.type);
+    }
+    if (Array.isArray(obj.objects)) obj.objects.forEach(normalizeTypesDeep);
+    if (Array.isArray(obj._objects)) obj._objects.forEach(normalizeTypesDeep);
+  };
+
+  objectsPayload = objectsPayload.map((obj: any) => {
+    const clone = JSON.parse(JSON.stringify(obj));
+    normalizeTypesDeep(clone);
+    return clone;
   });
+  const background = payload?.background ?? payload?.backgroundColor ?? '#ffffff';
+
+  c.clear();
+  c.backgroundColor = background;
+
+  try {
+    fabric.util.enlivenObjects(objectsPayload, (enlivened: any[]) => {
+      enlivened.forEach((obj: any) => {
+        normalizeObjectForEditing(obj);
+        if (typeof obj.initDimensions === 'function') {
+          obj.initDimensions();
+        }
+        if (typeof obj._setCornerCoords === 'function') {
+          obj._setCornerCoords();
+        }
+        obj.setCoords?.();
+        c.add(obj);
+      });
+
+      afterRestore();
+    }, null, fabric);
+  } catch (err) {
+    console.error('[history] enliven restore failed, falling back to loadFromJSON', err);
+    c.loadFromJSON(payload, afterRestore);
+  }
 }
 
 function undoCanvas() {
-  if (!canUndo.value) return;
-  const targetIndex = historyIndex.value;
-  historyIndex.value = targetIndex -1;
+  if (!canUndo.value) {
+    showToast('History tracking limit reached', 'error');
+    return;
+  }
+  const targetIndex = historyIndex.value - 1;
+  historyIndex.value = targetIndex;
   restoreHistoryAt(targetIndex);
 }
 
 function redoCanvas() {
-  if (!canRedo.value) return;
+  if (!canRedo.value) {
+    showToast('History tracking limit reached', 'error');
+    return;
+  }
   const targetIndex = historyIndex.value + 1;
   historyIndex.value = targetIndex;
   restoreHistoryAt(targetIndex);
@@ -981,7 +1283,7 @@ function redoCanvas() {
 
 /**
  * Restrict to numeric inches (supports decimals), min 1
- * - For step 1 we keep it simple; we’ll add per-type maxes later.
+ * - For step 1 we keep it simple; weâ€™ll add per-type maxes later.
  */
 function clampInches(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return 1
@@ -1048,8 +1350,9 @@ watch(
   { immediate: true }
 )
 
-// Simple inline “units” helper text
-const sizeLabel = computed(() => `${formHeightIn.value}\" × ${formWidthIn.value}\"`)
+// Simple inline â€œunitsâ€ helper text
+const sizeLabel = computed(() => `${formHeightIn.value}\" Ã— ${formWidthIn.value}\"`)
+
 
 const curved = ref({
   text: 'Sample Text',
@@ -1162,7 +1465,7 @@ function bindCanvasSelectionEvents(fCanvas) {
 
 
 function fitZoomToFace() {
-  // STEP 1: We won’t implement full zoom logic yet.
+  // STEP 1: We wonâ€™t implement full zoom logic yet.
   // If your canvas is already set up, you can call your existing fit function here.
   // TODO: integrate zoom/pan in Step 2.
 }
@@ -1197,6 +1500,7 @@ function hydrateStyleFromObject(obj: any | null) {
   styleState.fontSize = o.fontSize ?? styleState.fontSize;
   styleState.fontWeight = o.fontWeight ?? styleState.fontWeight;
   styleState.fontStyle = o.fontStyle ?? styleState.fontStyle;
+  styleState.textAlign = o.textAlign ?? styleState.textAlign;
   styleState.opacity = typeof obj.opacity === 'number' ? obj.opacity : styleState.opacity;
 
   return;
@@ -1208,6 +1512,7 @@ function hydrateStyleFromObject(obj: any | null) {
     styleState.fontSize = obj.fontSize ?? styleState.fontSize
     styleState.fontWeight = obj.fontWeight ?? styleState.fontWeight
     styleState.fontStyle = obj.fontStyle ?? styleState.fontStyle
+    styleState.textAlign = obj.textAlign ?? styleState.textAlign
     styleState.opacity = typeof obj.opacity === 'number' ? obj.opacity : styleState.opacity
   }
 }
@@ -1238,6 +1543,7 @@ function onSelectionClear() {
   styleState.fontSize = null
   styleState.fontWeight = null
   styleState.fontStyle = null
+  styleState.textAlign = 'left'
   ;(styleState as any).shadow = null
 }
 
@@ -1272,6 +1578,10 @@ function setBackgroundColor(color: string) {
 function onBackgroundColorCommit() {
   setBackgroundColor(backgroundColor.value);
   pushHistorySnapshot('backgroundColor');
+}
+
+function onBackgroundColorPreview() {
+  setBackgroundColor(backgroundColor.value);
 }
 
 function onBackgroundColorReset() {
@@ -1316,8 +1626,8 @@ onMounted(async () => {
   canvas.setZoom(1)
   canvas.requestRenderAll()
 
-  // 3) Apply your inches→pixels size (backing size again), then normalize
-  //    ⚠️ Ensure setCanvasSizeFromInches internally uses canvas.setDimensions({cssOnly:false})
+  // 3) Apply your inchesâ†’pixels size (backing size again), then normalize
+  //    âš ï¸ Ensure setCanvasSizeFromInches internally uses canvas.setDimensions({cssOnly:false})
   if (!props.designId) {
     applyTemplateDefaults(signType.value)
   } else {
@@ -1336,7 +1646,7 @@ onMounted(async () => {
   // === selection listeners (single, unified pipeline) ===
 canvas.on('selection:created', (e) => {
   const obj = e.selected?.[0] ?? canvas.getActiveObject?.() ?? null;
-
+  applyRotateCursor(obj);
   hydrateStyleFromObject(obj);    // keeps styleState/UI in sync with selection
   updateSelectedObject();         // sets selectionState.kind + selectionState.pathMeta
   hasSelection.value = true;      // keeps your existing flag correct
@@ -1344,7 +1654,7 @@ canvas.on('selection:created', (e) => {
 
 canvas.on('selection:updated', (e) => {
   const obj = e.selected?.[0] ?? canvas.getActiveObject?.() ?? null;
-
+  applyRotateCursor(obj);
   hydrateStyleFromObject(obj);
   updateSelectedObject();
   hasSelection.value = true;
@@ -1365,8 +1675,47 @@ canvas.on('selection:cleared', () => {
 
 
   //for line drawing.
-  canvas.on('mouse:down', handleCanvasMouseDown)
-  canvas.on('mouse:move', handleCanvasMouseMove)
+  canvas.on('mouse:down', (opt) => {
+    if (historyNeedsOffsetRefresh) {
+      syncCanvasOffsetIfNeeded(canvas, true);
+      historyNeedsOffsetRefresh = false;
+    }
+    if (historyNeedsCoordRefresh) {
+      const active = canvas.getActiveObject?.();
+      if (active) {
+        active.setCoords?.();
+        if (typeof (active as any)._setCornerCoords === 'function') {
+          (active as any)._setCornerCoords();
+        }
+        if (typeof (active as any).setCoords === 'function') {
+          (active as any).setCoords();
+        }
+        if (typeof (active as any).calcOCoords === 'function') {
+          (active as any).oCoords = (active as any).calcOCoords();
+        }
+      }
+      if (typeof (canvas as any)._setCursorFromEvent === 'function') {
+        (canvas as any)._setCursorFromEvent(opt.e);
+      }
+      historyNeedsCoordRefresh = false;
+    }
+    handleCanvasMouseDown(opt);
+  })
+  canvas.on('mouse:move', (opt) => {
+    if (historyNeedsCoordRefresh) {
+      const active = canvas.getActiveObject?.();
+      if (active) {
+        active.setCoords?.();
+        if (typeof (active as any)._setCornerCoords === 'function') {
+          (active as any)._setCornerCoords();
+        }
+      }
+      syncCanvasOffsetIfNeeded(canvas, true);
+      historyNeedsCoordRefresh = false;
+    }
+    syncCanvasOffsetIfNeeded(canvas);
+    handleCanvasMouseMove(opt);
+  })
   canvas.on('mouse:up', handleCanvasMouseUp)
 
   canvas.on('object:moving', (e) => {
@@ -1387,6 +1736,7 @@ canvas.on('selection:cleared', () => {
     if (target.isFaceRetainer) return;
 
     ensureObjectBelowFaceRetainer(target)
+    applyRotateCursor(target)
 
     /*object:added was duplicating the pushHistory snapshots that
     addCircle, etc, were calling:
@@ -1412,7 +1762,7 @@ canvas.on('selection:cleared', () => {
     pushHistorySnapshot('object:removed');
   });
 
-  // 5) Observe wrapper size so layout changes never “blank” the canvas again
+  // 5) Observe wrapper size so layout changes never â€œblankâ€ the canvas again
   observeCanvasWrapperResize()
 
   // 6) Preload all fonts after first stable paint (do not block load)
@@ -1434,7 +1784,9 @@ canvas.on('selection:cleared', () => {
     await loadDesignById(props.designId);
   }
   // Take initial history snapshot once everything is in a stable state
-  pushHistorySnapshot('initial');
+  if (history.value.length === 0) {
+    pushHistorySnapshot('initial');
+  }
 })
 
 onBeforeUnmount(() => {
@@ -1540,9 +1892,11 @@ async function loadDesignById(id: number | null) {
   }
 }
 
+
 function observeCanvasWrapperResize() {
   const wrap = document.getElementById('canvasWrap')
   if (!wrap) return
+  if (wrap.dataset.observe !== 'true') return
 
   const ro = new ResizeObserver(() => {
     const { width: w, height: h } = wrap.getBoundingClientRect()
@@ -1552,6 +1906,8 @@ function observeCanvasWrapperResize() {
     if (canvas.getWidth() !== newW || canvas.getHeight() !== newH) {
       canvas.setDimensions({ width: newW, height: newH }, { cssOnly: false })
       canvas.calcOffset()
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0])
+      canvas.setZoom(1)
 
       // keep transforms sane if something else messed with them
       const vt = canvas.viewportTransform
@@ -2037,7 +2393,7 @@ function resizeCanvasNoScale(newWidthIn: number, newHeightIn: number,
 function updateTextOnPath(group: any, patch: Record<string, any>) {
   // If you already have text/content layout logic, keep it above this block.
 
-  // 🔑 Apply the style patch to **every** text glyph in the group
+  // ðŸ”‘ Apply the style patch to **every** text glyph in the group
   forEachTextGlyphInPathGroup(group, (glyph) => {
     applyStyleToObject(glyph, patch)
   })
@@ -2057,7 +2413,7 @@ function applyStyleToSelection(style: Record<string, any>) {
     if (isTextOnPathGroup && isTextOnPathGroup(o)) {
       updateTextOnPath(o, style)
     } else {
-      applyStyleToObject(o, style)   // 🔴 now we actually use the helper
+      applyStyleToObject(o, style)   // ðŸ”´ now we actually use the helper
     }
   }
 
@@ -2327,7 +2683,7 @@ function updateSelectedObject() {
 
   hasSelection.value = true;
 
-  // Prefer using getSelectionKind everywhere so you’re not maintaining two classification systems
+  // Prefer using getSelectionKind everywhere so youâ€™re not maintaining two classification systems
   const kind = getSelectionKind(sel as any);
   selectionState.kind = kind;
   selectionKind.value = kind;
@@ -2606,7 +2962,7 @@ function moveToFrontSafe(obj: any, maxIndex?: number) {
 
 // Example: if you have a resize handler:
 window.addEventListener?.('resize', () => {
-  // your existing resize logic…
+  // your existing resize logicâ€¦
   afterResizeOrLayoutChange()
 })
 
@@ -2688,6 +3044,154 @@ function addRectangle() {
   pushHistorySnapshot('addRectangle');
 }
 
+function addRoundedRect() {
+  const rect = new fabric.Rect({
+    left: 150,
+    top: 150,
+    fill: '#999999',
+    width: 120,
+    height: 70,
+    rx: 12,
+    ry: 12,
+    stroke: '#000000',
+    strokeWidth: 1,
+  });
+  canvas.add(rect);
+  canvas.setActiveObject(rect);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('addRoundedRect');
+}
+
+function addTriangle() {
+  const width = 120;
+  const height = Math.round((Math.sqrt(3) / 2) * width);
+  const tri = new fabric.Triangle({
+    left: 150,
+    top: 150,
+    fill: '#999999',
+    width,
+    height,
+    stroke: '#000000',
+    strokeWidth: 1,
+  });
+  canvas.add(tri);
+  canvas.setActiveObject(tri);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('addTriangle');
+}
+
+function buildRegularPolygonPoints(sides: number, radius: number, rotation = 0) {
+  const points: { x: number; y: number }[] = [];
+  const angle = (Math.PI * 2) / sides;
+  for (let i = 0; i < sides; i++) {
+    const x = radius * Math.cos(rotation + angle * i);
+    const y = radius * Math.sin(rotation + angle * i);
+    points.push({ x, y });
+  }
+  return points;
+}
+
+function buildStarPoints(points: number, outerRadius: number, innerRadius: number, rotation = -Math.PI / 2) {
+  const verts: { x: number; y: number }[] = [];
+  const angle = Math.PI / points;
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius;
+    const x = r * Math.cos(rotation + angle * i);
+    const y = r * Math.sin(rotation + angle * i);
+    verts.push({ x, y });
+  }
+  return verts;
+}
+
+function addStar() {
+  const points = buildStarPoints(5, 60, 28);
+  const star = new fabric.Polygon(points, {
+    left: 160,
+    top: 160,
+    fill: '#999999',
+    stroke: '#000000',
+    strokeWidth: 1,
+  });
+  canvas.add(star);
+  canvas.setActiveObject(star);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('addStar');
+}
+
+function addOctagon() {
+  const points = buildRegularPolygonPoints(8, 60, Math.PI / 8);
+  const poly = new fabric.Polygon(points, {
+    left: 160,
+    top: 160,
+    fill: '#999999',
+    stroke: '#000000',
+    strokeWidth: 1,
+  });
+  canvas.add(poly);
+  canvas.setActiveObject(poly);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('addOctagon');
+}
+
+function addHeart() {
+  const path = new fabric.Path(
+    'M 75 40 ' +
+      'C 75 37 70 25 50 25 ' +
+      'C 20 25 20 62.5 20 62.5 ' +
+      'C 20 80 40 102 75 120 ' +
+      'C 110 102 130 80 130 62.5 ' +
+      'C 130 62.5 130 25 100 25 ' +
+      'C 85 25 75 37 75 40 Z',
+    {
+      left: 140,
+      top: 140,
+      fill: '#999999',
+      stroke: '#000000',
+      strokeWidth: 1,
+    }
+  );
+  canvas.add(path);
+  canvas.setActiveObject(path);
+  canvas.requestRenderAll();
+  pushHistorySnapshot('addHeart');
+}
+
+function flipHorizontal() {
+  if (!canvas) return;
+  const active = canvas.getActiveObject?.();
+  if (!active) return;
+
+  if ((active as any).type === 'activeSelection' && typeof (active as any).forEachObject === 'function') {
+    (active as any).forEachObject((obj: fabric.Object) => {
+      obj.set({ flipX: !obj.flipX });
+      obj.setCoords?.();
+    });
+  } else {
+    active.set({ flipX: !active.flipX });
+    active.setCoords?.();
+  }
+  canvas.requestRenderAll();
+  pushHistorySnapshot('flipHorizontal');
+}
+
+function flipVertical() {
+  if (!canvas) return;
+  const active = canvas.getActiveObject?.();
+  if (!active) return;
+
+  if ((active as any).type === 'activeSelection' && typeof (active as any).forEachObject === 'function') {
+    (active as any).forEachObject((obj: fabric.Object) => {
+      obj.set({ flipY: !obj.flipY });
+      obj.setCoords?.();
+    });
+  } else {
+    active.set({ flipY: !active.flipY });
+    active.setCoords?.();
+  }
+  canvas.requestRenderAll();
+  pushHistorySnapshot('flipVertical');
+}
+
 
 function addCircle() {
   const circle = new fabric.Circle({
@@ -2713,8 +3217,23 @@ function beginLineDrawMode() {
 
   // Optional: disable current selection while drawing
   canvas.discardActiveObject()
+  canvas.selection = false
+  ;(canvas as any).skipTargetFind = true
   canvas.defaultCursor = 'crosshair'
   canvas.renderAll()
+}
+
+function getRotateCursor() {
+  return `url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 24 24'>\
+<path fill='%23000' d='M12 2a10 10 0 1 0 9.54 6.54h-2.1A8 8 0 1 1 12 4v3l4-4-4-4v3z'/>\
+</svg>") 12 12, auto`;
+}
+
+function applyRotateCursor(obj: any) {
+  if (!obj?.controls?.mtr) return;
+  const rotateCursor = getRotateCursor();
+  obj.controls.mtr.cursorStyleHandler = () => rotateCursor;
 }
 
 // === [CurvedText] reactive UI state ===
@@ -2895,7 +3414,7 @@ function normalizeTextStyleUpdate(u) {
   if ('strokeWidth' in u) out.strokeWidth = Number(u.strokeWidth);
   if ('width' in u && ('stroke' in u || 'strokeColor' in u)) out.strokeWidth = Number(u.width);
 
-  // opacity (allow 0–1 or 0–100)
+  // opacity (allow 0â€“1 or 0â€“100)
   if ('opacity' in u) {
     const raw = Number(u.opacity);
     if (Number.isFinite(raw)) {
@@ -2917,6 +3436,10 @@ function normalizeTextStyleUpdate(u) {
   if ('fontStyle' in u) out.fontStyle = u.fontStyle;
   if ('italic' in u) out.fontStyle = u.italic ? 'italic' : 'normal';
 
+  // text alignment
+  if ('textAlign' in u) out.textAlign = String(u.textAlign);
+  if ('align' in u) out.textAlign = String(u.align);
+
   // shadow
   if ('shadowEnabled' in u) out.shadowEnabled = true;
   if ('shadowColor' in u) out.shadowColor = String(u.shadowColor);;
@@ -2932,7 +3455,7 @@ function normalizeTextStyleUpdate(u) {
   const mapped = normalizeTextStyleUpdate(update);
 
   if (obj.curved) {
-    // Update the group’s style “bag” (our own), then reflow
+    // Update the groupâ€™s style â€œbagâ€ (our own), then reflow
     obj.textStyle = obj.textStyle || {};
 
     if ('fill'       in mapped) obj.textStyle.fill       = mapped.fill;
@@ -3092,12 +3615,26 @@ function deleteSelected() {
   pushHistorySnapshot('deleteSelected');
 }
 
+function selectAllObjects() {
+  if (!canvas) return;
+  const candidates = canvas.getObjects().filter((o: any) =>
+    !o?.isGrid &&
+    !o?.isFaceRetainer &&
+    o?.name !== 'grid' &&
+    o?.name !== 'face-retainer'
+  );
+  if (!candidates.length) return;
+  const selection = new fabric.ActiveSelection(candidates, { canvas });
+  canvas.setActiveObject(selection);
+  canvas.requestRenderAll();
+}
+
 function alignLeft() {
   if (!canvas) return;
 
   withActiveObjects((obj) => {
     obj.set({ left: 0 });
-    obj.setCoords(); // 🔑 keep bounding box / hit test in sync
+    obj.setCoords(); // ðŸ”‘ keep bounding box / hit test in sync
   });
   pushHistorySnapshot('alignLeft')
 }
@@ -3179,21 +3716,22 @@ function groupObjects() {
   if (!activeObjects.length) return;
 
   // If there's only one object and it's already a group, nothing to do
-  if (activeObjects.length === 1 && (activeObjects[0] as any).type === 'group') {
-    return;
+  if (activeObjects.length === 1 && (activeObjects[0] as any).type === 'group') return;
+
+  const activeObj = canvas.getActiveObject?.();
+  if (activeObj && (activeObj as any).type === 'activeSelection' && typeof (activeObj as any)._restoreObjectsState === 'function') {
+    (activeObj as any)._restoreObjectsState();
   }
 
-  const group = new fabric.Group(activeObjects, {
-    selectable: true,
-    evented: true,
-  });
+  canvas.discardActiveObject();
+  activeObjects.forEach(obj => canvas.remove(obj));
 
-  activeObjects.forEach(obj => canvas!.remove(obj));
-
+  const group = new fabric.Group(activeObjects, { selectable: true, evented: true });
   canvas.add(group);
   canvas.setActiveObject(group);
   group.setCoords();
   canvas.requestRenderAll();
+  pushHistorySnapshot('group');
 }
 
 
@@ -3204,34 +3742,58 @@ function ungroupObjects() {
   if (!active || active.type !== 'group') return;
 
   const group = active as fabric.Group;
-  const items = (group as any)._objects || [];
+  const items = Array.isArray((group as any)._objects) ? [...(group as any)._objects] : [];
+  if (!items.length) return;
 
-  // Restore original child state (positions, transforms)
-  if (typeof (group as any)._restoreObjectsState === 'function') {
-    (group as any)._restoreObjectsState();
+  if (typeof (group as any).toActiveSelection === 'function') {
+    const selection = (group as any).toActiveSelection();
+    if (!selection) return;
+    selection.forEachObject?.((obj: fabric.Object) => {
+      obj.set({ selectable: true, evented: true, hasControls: true, hasBorders: true });
+      (obj as any).canvas = canvas;
+      obj.setCoords?.();
+    });
+    canvas.discardActiveObject();
+    canvas.requestRenderAll();
+    pushHistorySnapshot('ungroup');
+    return;
   }
 
-  // Remove the group from the canvas
+  const canRestore = typeof (group as any)._restoreObjectsState === 'function';
+  if (canRestore) {
+    (group as any)._restoreObjectsState();
+  }
+  const groupMatrix = !canRestore && typeof (group as any).calcTransformMatrix === 'function'
+    ? (group as any).calcTransformMatrix()
+    : null;
+
   canvas.remove(group);
   canvas.discardActiveObject();
 
-  // Add each child back to the canvas as a standalone object
   items.forEach((obj: fabric.Object) => {
-    obj.set({
-      selectable: true,
-      evented: true,
-    });
-    obj.setCoords();
+    if (groupMatrix) {
+      const addTransform = (fabric as any)?.util?.addTransformToObject;
+      if (typeof addTransform === 'function') {
+        addTransform(obj, groupMatrix);
+      } else {
+        const center = obj.getCenterPoint?.() ?? { x: obj.left ?? 0, y: obj.top ?? 0 };
+        const p = (fabric as any)?.util?.transformPoint
+          ? (fabric as any).util.transformPoint(center, groupMatrix)
+          : center;
+        obj.set({ left: p.x, top: p.y, originX: 'center', originY: 'center' });
+      }
+    }
+    obj.set({ selectable: true, evented: true, hasControls: true, hasBorders: true });
+    (obj as any).group = undefined;
+    (obj as any).canvas = canvas;
+    obj.setCoords?.();
     canvas.add(obj);
   });
 
-  // Optionally select them all as a multi-selection
-  if (items.length) {
-    const selection = new fabric.ActiveSelection(items, { canvas });
-    canvas.setActiveObject(selection);
-  }
-
+  canvas.selection = true;
+  (canvas as any).skipTargetFind = false;
   canvas.requestRenderAll();
+  pushHistorySnapshot('ungroup');
 }
 
 
@@ -3240,9 +3802,9 @@ function addBasePostForSign(signType) {
   let postHeight = 0;
 
   if (signType.startsWith('Monument')) {
-    postHeight = 72; // 3 ft × 24 px
+    postHeight = 72; // 3 ft Ã— 24 px
   } else if (signType.startsWith('Pylon')) {
-    postHeight = 240; // 10 ft × 24 px
+    postHeight = 240; // 10 ft Ã— 24 px
   }
   if (postHeight > 0) {
     const post = new fabric.Rect({
@@ -3589,18 +4151,6 @@ function loadCanvasFromJson(json) {
   });
 }
 
-function handlePathTextChange(payload) {
-  const obj = canvas?.getActiveObject()
-  if (!obj || !isTextOnPathGroup(obj)) return
-  updateTextOnPath(obj, payload)  // 👈 payload has fill / stroke / strokeWidth now
-}
-
-function handlePathTextApply(payload) {
-  const obj = canvas?.getActiveObject()
-  if (!obj || !isTextOnPathGroup(obj)) return
-  updateTextOnPath(obj, payload)
-}
-
 function copySelection() {
   if (!canvas) return;
   const active = canvas.getActiveObject?.();
@@ -3609,7 +4159,6 @@ function copySelection() {
     return;
   }
 
-  console.info('[copySelection] cloning', { type: active.type, id: (active as any).id, hasData: !!active.data });
   clipboard = null;
   clipboardJson = null;
 
@@ -3621,11 +4170,22 @@ function copySelection() {
     }
   }
 
+  if (active.type === 'activeSelection' || active.type === 'group') {
+    try {
+      const payload = active.toJSON(['data', 'sbPathMeta']);
+      payload.type = 'group';
+      clipboardJson = JSON.stringify(payload);
+    } catch (err) {
+      console.error('[copySelection] JSON fallback failed', err);
+      clipboardJson = null;
+    }
+    return;
+  }
+
   try {
     active.clone(
       (cloned: any) => {
         clipboard = cloned;
-        console.info('[copySelection] cloned into clipboard', { type: cloned?.type, hasData: !!cloned?.data });
       },
       ['data', 'sbPathMeta']
     );
@@ -3637,7 +4197,6 @@ function copySelection() {
     try {
       const payload = active.toJSON(['data', 'sbPathMeta']);
       clipboardJson = JSON.stringify(payload);
-      console.info('[copySelection] stored clipboard JSON fallback', { type: payload?.type, hasData: !!payload?.data });
     } catch (err) {
       console.error('[copySelection] JSON fallback failed', err);
       clipboardJson = null;
@@ -3657,7 +4216,6 @@ function pasteClipboard() {
 
   // Prefer live Fabric object if available
   if (clipboard) {
-    console.info('[pasteClipboard] cloning from clipboard object', { type: clipboard?.type, hasData: !!clipboard?.data });
     try {
       clipboard.clone(
         (clonedObj: any) => {
@@ -3665,9 +4223,6 @@ function pasteClipboard() {
             console.warn('[pasteClipboard] clone returned null');
             return;
           }
-
-          console.info('[pasteClipboard] cloned object', { type: clonedObj.type, hasData: !!clonedObj.data });
-
           canvas.discardActiveObject?.();
 
           clonedObj.set({
@@ -3682,10 +4237,8 @@ function pasteClipboard() {
               canvas.add(o);
             });
             clonedObj.setCoords();
-            console.info('[pasteClipboard] added activeSelection children', { count: clonedObj._objects?.length });
           } else {
             canvas.add(clonedObj);
-            console.info('[pasteClipboard] added object to canvas', { type: clonedObj.type });
           }
 
           canvas.setActiveObject(clonedObj);
@@ -3702,7 +4255,6 @@ function pasteClipboard() {
 
   // Fallback: revive from JSON
   if (clipboardJson) {
-    console.info('[pasteClipboard] attempting enliven from JSON');
     let payload: any = null;
     try {
       payload = JSON.parse(clipboardJson);
@@ -3751,8 +4303,7 @@ function pasteClipboard() {
 
     // Normalize type names to Fabric-friendly strings (including nested objects)
     normalizeFabricTypesDeep(payload);
-
-    console.info('[pasteClipboard] payload', payload);
+    if (payload?.type === 'activeSelection') payload.type = 'group';
 
     const reviveGradient = (fill: any) => {
       if (!fill || typeof fill !== 'object' || !Array.isArray(fill.colorStops)) return fill;
@@ -3803,10 +4354,8 @@ function pasteClipboard() {
           canvas.add(o);
         });
         clonedObj.setCoords();
-        console.info('[pasteClipboard] added activeSelection children', { count: clonedObj._objects?.length });
       } else {
         canvas.add(clonedObj);
-        console.info('[pasteClipboard] added object to canvas', { type: clonedObj.type });
       }
 
       canvas.setActiveObject(clonedObj);
@@ -3861,7 +4410,6 @@ function pasteClipboard() {
         console.error('[pasteClipboard] manual instantiate failed', err);
       }
       if (obj) {
-        console.info('[pasteClipboard] manually instantiated object', { type: obj.type });
         addCloned(obj);
         return true;
       }
@@ -3878,7 +4426,6 @@ function pasteClipboard() {
         enliven([payload], (objs: any[]) => {
           const clonedObj = objs?.[0];
           if (clonedObj) {
-            console.info('[pasteClipboard] enlivened object', { type: clonedObj.type, hasData: !!clonedObj.data });
             addCloned(clonedObj);
           } else {
             console.warn('[pasteClipboard] enliven returned null', payload);
