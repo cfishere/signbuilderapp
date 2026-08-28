@@ -1,6 +1,6 @@
 <template>
   <header class="border-b bg-slate-900 text-white">
-    <nav class="flex items-center justify-between px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
+    <nav class="flex items-center justify-between w-full px-4 py-3 sm:px-6 lg:px-8">
       <div class="flex items-center gap-3">
         <Link href="/admin" class="flex items-center gap-2">
           <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-bold text-slate-900 rounded-lg bg-amber-400">

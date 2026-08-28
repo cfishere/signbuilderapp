@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="w-full min-h-screen bg-white">
+  <div class="-mx-4 w-auto min-h-[calc(100vh-4.5rem)] bg-slate-100/70 sm:-mx-6 lg:-mx-8">
     <div
       v-if="!isSignTypeSelected"
       class="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4"
@@ -27,24 +27,22 @@
       </div>
     </div>
 
-    <header class="max-w-[1400px] mx-auto px-4">
-      <div class="grid grid-cols-12 gap-4 pt-6">
+    <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div class="grid w-full gap-4 px-4 py-6 sm:px-6 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:px-8">
         <!-- left spacer matches sidebar width -->
-        <div class="col-span-12 lg:col-span-3"></div>
-        <h1 class="col-span-12 text-2xl font-semibold text-center lg:col-span-9 sm:text-3xl">
+        <div class="hidden xl:block"></div>
+        <h1 class="text-2xl font-semibold text-center text-slate-900 sm:text-3xl xl:text-left">
           <!-- Keep your HxW header; pull values from your current props/state -->
           Sign Face {{ formHeightIn }} x {{ formWidthIn }} (inches)
         </h1>
       </div>
-
-
     </header>
 
     <!-- ROW 2: Sidebar + Canvas -->
-    <main class="max-w-[1400px] mx-auto px-4">
-      <div class="grid grid-cols-12 gap-6 py-6">
+    <main class="w-full px-4 py-6 sm:px-6 2xl:px-8">
+      <div class="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
         <!-- SIDEBAR (Left) -->
-        <aside class="col-span-12 space-y-6 lg:col-span-3">
+        <aside class="space-y-6 xl:sticky xl:top-6">
           <!-- Product / Sign info card -->
           <section class="p-4 border shadow-sm rounded-xl">
             <div class="flex items-center justify-center mb-4">
@@ -138,7 +136,7 @@
       <input
         type="color"
         v-model="backgroundColor"
-        class="h-10 w-14 border rounded cursor-pointer"
+        class="h-10 border rounded cursor-pointer w-14"
         style="min-width: 2.25rem;"
         aria-label="Canvas background color"
         @input="onBackgroundColorPreview"
@@ -213,28 +211,7 @@
         @path-text-change="(opts) => tweakSelectedTextOnPath(opts)"
         />
         <!-- Example toolbar snippet in CanvasEditor.vue -->
-        <div class="flex items-center gap-2 mb-3">
-          <!-- ...your existing buttons (add text, shapes, etc.)... -->
 
-          <button
-            type="button"
-            class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
-            :disabled="isSaving || !canSave"
-            @click="saveDesign"
-          >
-            <span v-if="!isSaving">Save Design</span>
-            <span v-else>Savingâ€¦</span>
-          </button>
-          <button
-            type="button"
-            class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-60"
-            :disabled="isOrdering || isSaving"
-            @click="orderSign"
-          >
-            <span v-if="!isOrdering">Order Sign</span>
-            <span v-else>Preparing...</span>
-          </button>
-        </div>
 
           <!-- Auth / Designs panel always visible
           <section class="p-4 border shadow-sm rounded-xl">
@@ -252,103 +229,107 @@
           </section>-->
         </aside>
 
-      <!-- CANVAS STAGE (Right) -->
-<section class="relative col-span-12 p-3 border shadow-sm lg:col-span-9 rounded-xl">
+        <!-- CANVAS STAGE (Right) -->
+        <section class="relative flex min-h-[65vh] flex-col overflow-hidden rounded-xl border bg-white p-3 shadow-sm xl:min-h-[calc(100vh-13rem)]">
+          <!-- TOOLBAR: directly beneath canvas, horizontal -->
+          <div
+            class="sticky z-50 mt-3 rounded-xl border bg-white/90 p-2 backdrop-blur bottom-3 md:relative"
+            :class="{ 'pointer-events-none opacity-60 select-none': !isSignTypeSelected }"
+          >
+            <DesignerToolsPanel
+              ref="toolsPanel"
+              :snapToGrid="snapToGrid"
+              :hasSelection="hasSelection"
+              :gridVisible="gridVisible"
+              :can-undo="canUndo"
+              :can-redo="canRedo"
+              @undo="undoCanvas"
+              @redo="redoCanvas"
+              @toggle-snap="(val) => snapToGrid = val"
+              @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
+              @add-text="addText"
+              @add-curved-text="addTextOnPath"
+              @add-rectangle="addRectangle"
+              @add-rounded-rect="addRoundedRect"
+              @add-triangle="addTriangle"
+              @add-star="addStar"
+              @add-octagon="addOctagon"
+              @add-heart="addHeart"
+              @add-circle="addCircle"
+              @start-line-tool="beginLineDrawMode"
+              @upload-image="uploadImage"
+              @bring-to-front="bringToFront"
+              @send-to-back="sendToBack"
+              @delete-selected="deleteSelected"
+              @align-left="alignLeft"
+              @align-center="alignCenter"
+              @align-right="alignRight"
+              @align-top="alignTop"
+              @align-middle="alignMiddle"
+              @align-bottom="alignBottom"
+              @group="groupObjects"
+              @ungroup="ungroupObjects"
+              @flip-horizontal="flipHorizontal"
+              @flip-vertical="flipVertical"
+              @copy="copySelection"
+              @paste="pasteClipboard"
+              @select-all="selectAllObjects"
+              @file-upload="handleFileUpload"
+              :fonts="availableFonts"
+            />
+            <div class="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-col">
+                <label class="text-xs font-semibold text-gray-600">
+                  Design Title
+                </label>
+                <input
+                  v-model="designName"
+                  type="text"
+                  class="mt-1 w-full max-w-sm rounded-md border border-gray-300 px-2 py-1.5 text-sm shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
+                  placeholder="My Sign Design"
+                />
+              </div>
 
-  <!-- TOOLBAR: directly beneath canvas, horizontal -->
-  <div
-    class="sticky z-50 p-2 mt-3 border rounded-xl bg-white/90 backdrop-blur md:relative bottom-3"
-    :class="{ 'pointer-events-none opacity-60 select-none': !isSignTypeSelected }"
-  >
-    <DesignerToolsPanel
-      ref="toolsPanel"
-      :snapToGrid="snapToGrid"
-      :hasSelection="hasSelection"
-      :gridVisible="gridVisible"
-      :can-undo="canUndo"
-      :can-redo="canRedo"
-      @undo="undoCanvas"
-      @redo="redoCanvas"
-      @toggle-snap="(val) => snapToGrid = val"
-      @toggle-grid="(val) => { gridVisible = val; refreshGrid() }"
-      @add-text="addText"
-      @add-curved-text="addTextOnPath"
-      @add-rectangle="addRectangle"
-      @add-rounded-rect="addRoundedRect"
-      @add-triangle="addTriangle"
-      @add-star="addStar"
-      @add-octagon="addOctagon"
-      @add-heart="addHeart"
-      @add-circle="addCircle"
-      @start-line-tool="beginLineDrawMode"
-      @upload-image="uploadImage"
-      @bring-to-front="bringToFront"
-      @send-to-back="sendToBack"
-      @delete-selected="deleteSelected"
-      @align-left="alignLeft"
-      @align-center="alignCenter"
-      @align-right="alignRight"
-      @align-top="alignTop"
-      @align-middle="alignMiddle"
-      @align-bottom="alignBottom"
-      @group="groupObjects"
-      @ungroup="ungroupObjects"
-      @flip-horizontal="flipHorizontal"
-      @flip-vertical="flipVertical"
-      @copy="copySelection"
-      @paste="pasteClipboard"
-      @select-all="selectAllObjects"
-      @file-upload="handleFileUpload"
-      :fonts="availableFonts"
-    />
-<div class="flex flex-col gap-1 mb-3 sm:flex-row sm:items-center sm:justify-between">
-  <div class="flex flex-col">
-    <label class="text-xs font-semibold text-gray-600">
-      Design Title
-    </label>
-    <input
-      v-model="designName"
-      type="text"
-      class="mt-1 w-full max-w-sm rounded-md border border-gray-300 px-2 py-1.5 text-sm shadow-sm focus:border-emerald-500 focus:ring-emerald-500"
-      placeholder="My Sign Design"
-    />
-  </div>
+              <div class="mt-2 flex items-center gap-2 sm:mt-0">
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
+                  :disabled="isSaving || isLoadingDesign || !canSave"
+                  @click="saveDesign"
+                >
+                  <span v-if="!isSaving">{{ currentDesignId ? 'Update Design' : 'Save Design' }}</span>
+                  <span v-else>Savingâ€¦</span>
+                </button>
+                <button
+                  type="button"
+                  class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-60"
+                  :disabled="isOrdering || isSaving"
+                  @click="orderSign"
+                >
+                  <span v-if="!isOrdering">Order Sign</span>
+                  <span v-else>Preparing...</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
-  <div class="flex items-center gap-2 mt-2 sm:mt-0">
-    <button
-      type="button"
-      class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
-      :disabled="isSaving || isLoadingDesign || !canSave"
-      @click="saveDesign"
-    >
-      <span v-if="!isSaving">{{ currentDesignId ? 'Update Design' : 'Save Design' }}</span>
-      <span v-else>Savingâ€¦</span>
-    </button>
-  </div>
-</div>
-
-
-  </div>
-
-  <!-- Canvas container -->
-  <div ref="stage" id="canvasWrap" class="relative bg-white border rounded-lg">
-    <div
-      v-if="!isSignTypeSelected"
-      class="absolute inset-0 z-10 flex items-center justify-center text-sm font-semibold text-gray-700 bg-white/80"
-    >
-      Select a sign type to start designing.
-    </div>
-    <!-- <div class="absolute inset-0 pointer-events-none"></div> -->
-    <canvas
-      ref="canvasEl"
-      id="canvasEl"
-      class="block w-full h-full mx-auto"
-    ></canvas>
-  </div>
-
-
-</section>
-</div>
+          <!-- Canvas container -->
+          <div ref="stage" id="canvasWrap" class="relative min-h-[420px] flex-1 overflow-hidden rounded-lg border bg-white">
+            <div
+              v-if="!isSignTypeSelected"
+              class="absolute inset-0 z-10 flex items-center justify-center bg-white/80 text-sm font-semibold text-gray-700"
+            >
+              Select a sign type to start designing.
+            </div>
+            <!-- <div class="absolute inset-0 pointer-events-none"></div> -->
+            <canvas
+              ref="canvasEl"
+              id="canvasEl"
+              class="mx-auto block h-full w-full"
+            ></canvas>
+          </div>
+        </section>
+      </div>
     </main>
 
     <div
@@ -3993,7 +3974,7 @@ async function orderSign() {
     });
 
     if (order?.id) {
-      window.location.href = `/orders/${order.id}`;
+      window.location.href = `/orders/${order.id}/add-ons`;
     } else {
       showToast('Order created, but no order ID was returned.', 'error');
     }

@@ -7,9 +7,11 @@ use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\PayPalController;
 use App\Http\Controllers\API\JobController;
 use App\Http\Controllers\API\OrderAbandonedController;
+use App\Http\Controllers\API\InvoiceController;
 use App\Http\Controllers\DesignIndexController;
 use App\Http\Controllers\OrderIndexController;
 use App\Http\Controllers\OrderShowController;
+use App\Http\Controllers\OrderAddOnController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AddOnProductController;
 use App\Http\Controllers\Admin\AdminDesignIndexController;
@@ -39,6 +41,8 @@ Route::middleware(['auth'])->group(function () {
     })->name('account.index');
     Route::get('/designs', [DesignIndexController::class, 'index'])->name('designs.index');
     Route::get('/orders', [OrderIndexController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}/add-ons', [OrderAddOnController::class, 'show'])->name('orders.add-ons');
+    Route::get('/orders/{order}/invoice/download', [InvoiceController::class, 'download'])->name('orders.invoice.download');
     Route::get('/orders/{order}', [OrderShowController::class, 'show'])->name('orders.show');
 });
 
@@ -61,12 +65,14 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.api.show');
     Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
+    Route::put('/orders/{order}/add-ons', [OrderAddOnController::class, 'update'])->name('orders.add-ons.update');
     Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
 
     Route::post('/orders/{order}/paypal/create', [PayPalController::class, 'create'])->name('orders.paypal.create');
     Route::post('/orders/{order}/paypal/capture', [PayPalController::class, 'capture'])->name('orders.paypal.capture');
     Route::post('/orders/{order}/jobs/print-image', [JobController::class, 'storePrintImage'])->name('orders.jobs.print-image');
     Route::post('/orders/{order}/abandoned', [OrderAbandonedController::class, 'store'])->name('orders.abandoned');
+    Route::post('/orders/{order}/invoice/generate', [InvoiceController::class, 'generate'])->name('orders.invoice.generate');
 });
 
 //AUTH ROUTES

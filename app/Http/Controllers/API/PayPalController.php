@@ -193,6 +193,7 @@ class PayPalController extends Controller
             'city' => $order->city,
             'region' => $order->region,
             'postal_code' => $order->postal_code,
+            'delivery_method' => $order->delivery_method,
         ];
 
         $missing = [];

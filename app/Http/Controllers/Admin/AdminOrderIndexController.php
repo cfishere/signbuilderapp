@@ -24,7 +24,7 @@ class AdminOrderIndexController extends Controller
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
 
-        $ordersQuery = Order::with(['user', 'designs', 'job'])
+        $ordersQuery = Order::with(['user', 'designs', 'job', 'invoice'])
             ->latest();
 
         if ($orderNumber !== '') {
@@ -69,6 +69,13 @@ class AdminOrderIndexController extends Controller
                     ? Storage::disk('public')->url($order->job->print_image_path)
                     : null,
                 'updated_at' => optional($order->updated_at)->toDateTimeString(),
+                'invoice' => $order->invoice ? [
+                    'id' => $order->invoice->id,
+                    'invoice_number' => $order->invoice->invoice_number,
+                    'status' => $order->invoice->status,
+                    'issued_at' => optional($order->invoice->issued_at)->toDateTimeString(),
+                    'download_url' => route('orders.invoice.download', $order),
+                ] : null,
             ]);
 
         return Inertia::render('Admin/Orders/Index', [

@@ -13,6 +13,7 @@ declare global {
 
 const page = usePage();
 const order = ref(page.props.order);
+const customerProfile = (page.props.customer_profile || {}) as Record<string, string>;
 const paypalClientId = page.props.paypal_client_id as string | null;
 const isAdmin = computed(() => !!page.props.auth?.user?.is_admin);
 const isPaid = computed(() => {
@@ -20,13 +21,15 @@ const isPaid = computed(() => {
   return status === 'paid' || status === 'completed';
 });
 const form = ref({
-  customer_name: order.value.customer_name || '',
-  address_line1: order.value.address_line1 || '',
-  address_line2: order.value.address_line2 || '',
-  city: order.value.city || '',
-  region: order.value.region || '',
-  postal_code: order.value.postal_code || '',
-  country: order.value.country || 'US',
+  company_name: customerProfile.company_name || '',
+  customer_name: order.value.customer_name || customerProfile.customer_name || '',
+  address_line1: order.value.address_line1 || customerProfile.address_line1 || '',
+  address_line2: order.value.address_line2 || customerProfile.address_line2 || '',
+  city: order.value.city || customerProfile.city || '',
+  region: order.value.region || customerProfile.region || '',
+  postal_code: order.value.postal_code || customerProfile.postal_code || '',
+  country: order.value.country || customerProfile.country || 'US',
+  nonprofit: Boolean(customerProfile.nonprofit),
   delivery_method: order.value.delivery_method || '',
   total_amount: order.value.total_amount ?? '',
   currency: order.value.currency || 'USD',
@@ -38,6 +41,88 @@ const paypalError = ref('');
 const paypalStatus = ref('');
 const paypalContainer = ref<HTMLElement | null>(null);
 const isPaying = ref(false);
+const isGeneratingInvoice = ref(false);
+const invoiceState = ref(order.value.invoice || null);
+const deliveryRates: Record<string, number> = {
+  UPS: 200,
+  Freight: 370,
+  FedEx: 190,
+  USPS: 350,
+  'Local Pickup': 0,
+};
+const OH_SALES_TAX_RATE = 0.08;
+const US_STATE_OPTIONS = [
+  { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' }, { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' }, { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' }, { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' }, { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' }, { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' }, { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' }, { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
+] as const;
+const REGION_NAME_TO_CODE = US_STATE_OPTIONS.reduce((acc, s) => {
+  acc[s.name.toLowerCase()] = s.code;
+  return acc;
+}, {} as Record<string, string>);
+const baseSignTotal = ref(0);
+const addOnTotal = ref(0);
+const requiredCustomerFields = [
+  'customer_name',
+  'address_line1',
+  'city',
+  'region',
+  'postal_code',
+  'delivery_method',
+] as const;
+const missingCustomerFields = computed(() => {
+  return requiredCustomerFields.filter((key) => !String(form.value[key] || '').trim());
+});
+const hasCustomerDetails = computed(() => missingCustomerFields.value.length === 0);
+const hasValidTotal = computed(() => Number(form.value.total_amount || 0) > 0);
+const canSubmitCustomerInfo = computed(() => hasCustomerDetails.value && hasValidTotal.value);
+const merchandiseSubtotal = computed(() => baseSignTotal.value + addOnTotal.value);
+const deliveryFee = computed(() => getDeliveryFee(form.value.delivery_method));
+const isOhioTaxable = computed(() => {
+  const raw = String(form.value.region || '').trim();
+  if (!raw) return false;
+  return raw.toUpperCase() === 'OH' || raw.toLowerCase() === 'ohio';
+});
+const isTaxExempt = computed(() => Boolean(form.value.nonprofit));
+const salesTax = computed(() => {
+  const taxableAmount = merchandiseSubtotal.value + deliveryFee.value;
+  if (!isOhioTaxable.value || isTaxExempt.value) return 0;
+  return Number((taxableAmount * OH_SALES_TAX_RATE).toFixed(2));
+});
+const orderSubtotal = computed(() => {
+  return Number((merchandiseSubtotal.value + deliveryFee.value + salesTax.value).toFixed(2));
+});
+
+function getDeliveryFee(method?: string | null): number {
+  return deliveryRates[String(method || '')] ?? 0;
+}
+
+function applyDeliveryPricedTotal() {
+  const total = orderSubtotal.value;
+  form.value.total_amount = Number(total.toFixed(2));
+}
+
+function normalizeRegionToStateCode(value: string): string {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  const upper = normalized.toUpperCase();
+  if (US_STATE_OPTIONS.some((s) => s.code === upper)) return upper;
+  return REGION_NAME_TO_CODE[normalized.toLowerCase()] || normalized;
+}
 
 function canRenderPayPal() {
   const status = String(order.value?.status || '').toLowerCase();
@@ -46,6 +131,21 @@ function canRenderPayPal() {
 
 function printOrder() {
   window.print();
+}
+
+async function generateInvoice() {
+  if (!order.value?.id) return;
+  isGeneratingInvoice.value = true;
+  statusMessage.value = '';
+  try {
+    const { data } = await axios.post(`/api/orders/${order.value.id}/invoice/generate`);
+    invoiceState.value = data?.invoice || null;
+    statusMessage.value = 'Invoice generated.';
+  } catch (err: any) {
+    statusMessage.value = err?.response?.data?.message || 'Unable to generate invoice.';
+  } finally {
+    isGeneratingInvoice.value = false;
+  }
 }
 
 function loadPayPalSdk() {
@@ -90,6 +190,15 @@ async function renderPayPalButtons() {
     createOrder: async () => {
       paypalStatus.value = '';
       try {
+        if (!hasCustomerDetails.value) {
+          paypalStatus.value = 'Please submit customer details before starting payment.';
+          throw new Error('Missing customer details');
+        }
+        if (!hasValidTotal.value) {
+          paypalStatus.value = 'Order total must be greater than 0 before starting payment.';
+          throw new Error('Invalid order total');
+        }
+
         const needsTotalUpdate =
           String(form.value.total_amount) !== String(order.value.total_amount ?? '') ||
           String(form.value.currency || 'USD') !== String(order.value.currency || 'USD');
@@ -146,10 +255,27 @@ async function renderPayPalButtons() {
 }
 
 onMounted(async () => {
-  if (!form.value.total_amount) {
-    const signType = order.value.metadata?.sign_type as string | undefined;
-    form.value.total_amount = getBasePriceForSignType(signType);
+  form.value.region = normalizeRegionToStateCode(form.value.region);
+  const metadata = (order.value?.metadata || {}) as Record<string, any>;
+  const metaBase = Number(metadata?.base_total_amount);
+  const metaAddOn = Number(metadata?.add_on_total_amount);
+
+  if (Number.isFinite(metaBase)) {
+    baseSignTotal.value = metaBase;
+    addOnTotal.value = Number.isFinite(metaAddOn) ? metaAddOn : 0;
+  } else {
+    const currentTotal = Number(order.value?.total_amount || 0);
+    baseSignTotal.value = Math.max(0, currentTotal - getDeliveryFee(form.value.delivery_method));
+    addOnTotal.value = 0;
   }
+
+  if (!Number.isFinite(baseSignTotal.value) || baseSignTotal.value <= 0) {
+    const signType = order.value.metadata?.sign_type as string | undefined;
+    baseSignTotal.value = Number(getBasePriceForSignType(signType) || 0);
+    addOnTotal.value = 0;
+  }
+
+  applyDeliveryPricedTotal();
 
   try {
     await loadPayPalSdk();
@@ -165,6 +291,32 @@ watch(
     if (paypalContainer.value) {
       await renderPayPalButtons();
     }
+  }
+);
+
+watch(
+  () => form.value.delivery_method,
+  () => {
+    applyDeliveryPricedTotal();
+  }
+);
+watch(
+  () => form.value.region,
+  (value) => {
+    const normalized = normalizeRegionToStateCode(value);
+    if (normalized !== value) {
+      form.value.region = normalized;
+      return;
+    }
+    applyDeliveryPricedTotal();
+  }
+);
+
+watch(
+  () => [form.value.customer_name, form.value.address_line1, form.value.city, form.value.region, form.value.postal_code, form.value.delivery_method, form.value.total_amount],
+  async () => {
+    if (!paypalContainer.value) return;
+    await renderPayPalButtons();
   }
 );
 
@@ -225,6 +377,21 @@ async function submitCustomerInfo() {
           >
             Print
           </button>
+          <button
+            type="button"
+            class="inline-flex items-center rounded-md border border-slate-400 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            :disabled="isGeneratingInvoice"
+            @click="generateInvoice"
+          >
+            {{ isGeneratingInvoice ? 'Generating Invoice...' : (invoiceState ? 'Regenerate Invoice' : 'Generate Invoice') }}
+          </button>
+          <a
+            v-if="invoiceState?.download_url"
+            :href="invoiceState.download_url"
+            class="inline-flex items-center rounded-md border border-slate-400 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Download Invoice
+          </a>
           <Link
             href="/orders"
             class="inline-flex items-center rounded-md border border-emerald-600 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
@@ -259,6 +426,25 @@ async function submitCustomerInfo() {
           <div class="rounded-lg border bg-white/80 p-4">
             <div class="text-sm font-semibold mb-3">Details</div>
             <form class="text-sm text-gray-700 space-y-3" @submit.prevent="submitCustomerInfo">
+              <div>
+                <label class="text-xs uppercase text-gray-400">Company Name</label>
+                <input
+                  v-model="form.company_name"
+                  type="text"
+                  class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  :disabled="!isAdmin && isPaid"
+                />
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  id="nonprofit"
+                  v-model="form.nonprofit"
+                  type="checkbox"
+                  class="rounded border-gray-300"
+                  :disabled="!isAdmin && isPaid"
+                />
+                <label for="nonprofit" class="text-xs uppercase text-gray-400">Nonprofit (Tax Exempt)</label>
+              </div>
               <div>
                 <label class="text-xs uppercase text-gray-400">Customer Name</label>
                 <input
@@ -304,13 +490,17 @@ async function submitCustomerInfo() {
                 </div>
                 <div>
                   <label class="text-xs uppercase text-gray-400">Region</label>
-                  <input
+                  <select
                     v-model="form.region"
-                    type="text"
                     class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
                     required
                     :disabled="!isAdmin && isPaid"
-                  />
+                  >
+                    <option value="">Select state...</option>
+                    <option v-for="state in US_STATE_OPTIONS" :key="state.code" :value="state.code">
+                      {{ state.name }}
+                    </option>
+                  </select>
                   <div v-if="errors.region" class="text-xs text-red-600">{{ errors.region }}</div>
                 </div>
               </div>
@@ -341,6 +531,7 @@ async function submitCustomerInfo() {
                 <select
                   v-model="form.delivery_method"
                   class="mt-1 w-full rounded border px-2 py-1 text-sm disabled:bg-gray-100 disabled:text-gray-500"
+                  required
                   :disabled="!isAdmin && isPaid"
                 >
                   <option value="">Select...</option>
@@ -392,15 +583,28 @@ async function submitCustomerInfo() {
                 <span class="text-xs uppercase text-gray-400">Notes</span>
                 <div class="whitespace-pre-line">{{ order.notes || '-' }}</div>
               </div>
+              <div>
+                <span class="text-xs uppercase text-gray-400">Invoice</span>
+                <div v-if="invoiceState">
+                  {{ invoiceState.invoice_number || '-' }} ({{ String(invoiceState.status || '-').toUpperCase() }})
+                </div>
+                <div v-else>-</div>
+              </div>
               <div class="flex items-center gap-2 pt-2 print:hidden">
                 <button
                   v-if="isAdmin || !isPaid"
                   type="submit"
                   class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700 disabled:opacity-60"
-                  :disabled="isSaving"
+                  :disabled="isSaving || !canSubmitCustomerInfo"
                 >
                   {{ isSaving ? 'Saving...' : 'Submit Customer Info' }}
                 </button>
+                <span
+                  v-if="!canSubmitCustomerInfo && (isAdmin || !isPaid)"
+                  class="text-xs text-amber-700"
+                >
+                  Complete required fields and delivery method to continue.
+                </span>
                 <span v-if="statusMessage" class="text-xs text-gray-500">{{ statusMessage }}</span>
               </div>
             </form>
@@ -411,14 +615,48 @@ async function submitCustomerInfo() {
             <div class="text-xs text-gray-500 mb-3">
               Total: {{ order.total_amount || '0.00' }} {{ order.currency || 'USD' }}
             </div>
+            <div class="mb-3 rounded border bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
+              <div class="flex items-center justify-between">
+                <span>Base Sign</span>
+                <span>{{ baseSignTotal.toFixed(2) }} {{ order.currency || 'USD' }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>Add-Ons</span>
+                <span>{{ addOnTotal.toFixed(2) }} {{ order.currency || 'USD' }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>Delivery</span>
+                <span>{{ deliveryFee.toFixed(2) }} {{ order.currency || 'USD' }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span>OH Sales Tax (8%)</span>
+                <span>{{ salesTax.toFixed(2) }} {{ order.currency || 'USD' }}</span>
+              </div>
+              <div class="flex items-center justify-between border-t pt-1 font-semibold text-slate-900">
+                <span>Subtotal</span>
+                <span>{{ orderSubtotal.toFixed(2) }} {{ order.currency || 'USD' }}</span>
+              </div>
+            </div>
             <div v-if="paypalError" class="text-xs text-red-600 mb-2">{{ paypalError }}</div>
             <div v-if="!canRenderPayPal()" class="text-xs text-gray-500">
               Payment complete.
             </div>
             <div v-else-if="isAdmin || !isPaid" ref="paypalContainer"></div>
+            <div
+              v-if="canRenderPayPal() && !hasCustomerDetails"
+              class="text-xs text-amber-700 mt-2"
+            >
+              Missing required customer details will block payment on submit.
+            </div>
+            <div
+              v-if="canRenderPayPal() && !hasValidTotal"
+              class="text-xs text-amber-700 mt-1"
+            >
+              Order total must be greater than 0 to start payment.
+            </div>
             <div v-if="paypalStatus" class="text-xs text-gray-500 mt-2">{{ paypalStatus }}</div>
             <div class="mt-3 text-xs text-gray-500">
-              Status: {{ order.paypal_status || '-' }} â€¢ Paid: {{ order.paid_at || '-' }}
+              Order Status: {{ order.status || 'unpaid' }} • PayPal Status: {{ order.paypal_status || '-' }} • Paid At: {{ order.paid_at || '-' }}
             </div>
             <div v-if="isPaying" class="text-xs text-gray-500 mt-1">
               Processing payment...
@@ -430,3 +668,4 @@ async function submitCustomerInfo() {
     </div>
   </AppLayout>
 </template>
+

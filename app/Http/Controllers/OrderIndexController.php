@@ -15,6 +15,7 @@ class OrderIndexController extends Controller
         $user = $request->user();
 
         $orders = $user->orders()
+            ->with('invoice')
             ->latest()
             ->paginate(20)
             ->through(fn ($order) => [
@@ -26,6 +27,13 @@ class OrderIndexController extends Controller
                     ? Storage::disk('public')->url($order->preview_image_path)
                     : null,
                 'updated_at' => optional($order->updated_at)->toDateTimeString(),
+                'invoice' => $order->invoice ? [
+                    'id' => $order->invoice->id,
+                    'invoice_number' => $order->invoice->invoice_number,
+                    'status' => $order->invoice->status,
+                    'issued_at' => optional($order->invoice->issued_at)->toDateTimeString(),
+                    'download_url' => route('orders.invoice.download', $order),
+                ] : null,
             ]);
 
         return Inertia::render('Orders/Index', [

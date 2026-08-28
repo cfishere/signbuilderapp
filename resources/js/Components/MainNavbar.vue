@@ -1,6 +1,6 @@
 <template>
   <header class="border-b bg-white/80 backdrop-blur print:hidden">
-    <nav class="flex items-center justify-between px-4 py-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
+    <nav class="flex items-center justify-between w-full px-4 py-3 sm:px-6 lg:px-8">
       <!-- Left: Brand / Home -->
       <div class="flex items-center gap-3">
         <Link href="/" class="flex items-center gap-2">
@@ -27,13 +27,7 @@
           >
             My Account
           </Link>
-          <Link
-            href="/account"
-            class="text-gray-600 hover:text-gray-900"
-            v-if="authUser"
-          >
-            My Account
-          </Link>
+
           <Link
             href="/admin/users/create"
             class="text-gray-600 hover:text-gray-900"
@@ -59,6 +53,14 @@
           >
             Admin
           </Link>
+
+          <button
+            type="button"
+            class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            @click="goToMyOrders"
+          >
+            My Orders
+          </button>
 
           <button
             type="button"
@@ -111,5 +113,9 @@ function logout() {
 
 function goToMyDesigns() {
   router.get('/designs');
+}
+
+function goToMyOrders() {
+  router.get('/orders');
 }
 </script>

@@ -60,6 +60,11 @@ class User extends Authenticatable
         return $this->hasMany(Order::class);
     }
 
+    public function customer()
+    {
+        return $this->hasOne(Customer::class);
+    }
+
     public function isAdmin(): bool
     {
         // Safely handle null if column doesn’t exist yet

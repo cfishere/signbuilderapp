@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\OrderJob;
+use App\Models\Invoice;
 
 class Order extends Model
 {
@@ -58,5 +59,10 @@ class Order extends Model
     public function job()
     {
         return $this->hasOne(OrderJob::class);
+    }
+
+    public function invoice()
+    {
+        return $this->hasOne(Invoice::class);
     }
 }

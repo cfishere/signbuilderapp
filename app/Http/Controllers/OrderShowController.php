@@ -4,18 +4,29 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\Design;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Http\RedirectResponse;
 
 class OrderShowController extends Controller
 {
-    public function show(Order $order): Response
+    public function show(Request $request, Order $order): Response|RedirectResponse
     {
         $this->authorize('view', $order);
 
+        $metadata = is_array($order->metadata) ? $order->metadata : [];
+        $hasVisitedAddOns = array_key_exists('add_on_product_ids', $metadata);
+        $isUnpaid = strtolower((string) $order->status) === 'unpaid';
+        if ($isUnpaid && !$hasVisitedAddOns && !$request->boolean('skip_addons')) {
+            return redirect()->route('orders.add-ons', $order);
+        }
+
         $design = Design::where('order_id', $order->id)->latest()->first();
         $job = $order->job;
+        $invoice = $order->invoice;
+        $customerProfile = $order->user?->customer;
 
         return Inertia::render('Orders/Show', [
             'order' => [
@@ -44,6 +55,13 @@ class OrderShowController extends Controller
                 'design_id' => $design?->id,
                 'submitted_at' => optional($order->submitted_at)->toDateTimeString(),
                 'updated_at' => optional($order->updated_at)->toDateTimeString(),
+                'invoice' => $invoice ? [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'issued_at' => optional($invoice->issued_at)->toDateTimeString(),
+                    'download_url' => route('orders.invoice.download', $order),
+                ] : null,
             ],
             'job' => $job ? [
                 'id' => $job->id,
@@ -58,6 +76,17 @@ class OrderShowController extends Controller
             ] : null,
             'paypal_client_id' => config('services.paypal.client_id'),
             'paypal_mode' => config('services.paypal.mode', 'sandbox'),
+            'customer_profile' => $customerProfile ? [
+                'company_name' => $customerProfile->company_name,
+                'customer_name' => $customerProfile->customer_name,
+                'address_line1' => $customerProfile->address_line1,
+                'address_line2' => $customerProfile->address_line2,
+                'city' => $customerProfile->city,
+                'region' => $customerProfile->region,
+                'postal_code' => $customerProfile->postal_code,
+                'country' => $customerProfile->country,
+                'nonprofit' => (bool) $customerProfile->nonprofit,
+            ] : null,
         ]);
     }
 }

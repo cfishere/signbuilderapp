@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\Design;
 use App\Models\Order;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -45,6 +47,8 @@ class OrderController extends Controller
             'delivery_method' => 'nullable|string|in:Freight,UPS,USPS,FedEx,Local Pickup',
             'notes' => 'nullable|string|max:2000',
             'metadata' => 'nullable|array',
+            'company_name' => 'nullable|string|max:255',
+            'nonprofit' => 'nullable|boolean',
             'design_id' => 'nullable|integer|exists:designs,id',
             'preview_image_data' => 'nullable|string',
             'submitted_at' => 'nullable|date',
@@ -52,26 +56,44 @@ class OrderController extends Controller
 
         $validated['status'] = $validated['status'] ?? 'unpaid';
         $this->assertCustomerFieldsPresent($validated, $validated['status'], null);
+        $customerPayload = $this->extractCustomerPayload($validated);
 
-        $orderNumber = $validated['order_number'] ?? $this->nextOrderNumber();
+        $order = null;
+        $attempts = 0;
+        while ($attempts < 5 && !$order) {
+            $attempts++;
+            $orderNumber = $validated['order_number'] ?? $this->nextOrderNumber();
 
-        $order = Auth::user()->orders()->create([
-            'order_number' => $orderNumber,
-            'status' => $validated['status'],
-            'total_amount' => $validated['total_amount'] ?? null,
-            'currency' => $validated['currency'] ?? 'USD',
-            'customer_name' => $validated['customer_name'] ?? '',
-            'address_line1' => $validated['address_line1'] ?? '',
-            'address_line2' => $validated['address_line2'] ?? null,
-            'city' => $validated['city'] ?? '',
-            'region' => $validated['region'] ?? '',
-            'postal_code' => $validated['postal_code'] ?? '',
-            'country' => $validated['country'] ?? 'US',
-            'delivery_method' => $validated['delivery_method'] ?? null,
-            'notes' => $validated['notes'] ?? null,
-            'metadata' => $validated['metadata'] ?? null,
-            'submitted_at' => $validated['submitted_at'] ?? null,
-        ]);
+            try {
+                $order = Auth::user()->orders()->create([
+                    'order_number' => $orderNumber,
+                    'status' => $validated['status'],
+                    'total_amount' => $validated['total_amount'] ?? null,
+                    'currency' => $validated['currency'] ?? 'USD',
+                    'customer_name' => $validated['customer_name'] ?? '',
+                    'address_line1' => $validated['address_line1'] ?? '',
+                    'address_line2' => $validated['address_line2'] ?? null,
+                    'city' => $validated['city'] ?? '',
+                    'region' => $validated['region'] ?? '',
+                    'postal_code' => $validated['postal_code'] ?? '',
+                    'country' => $validated['country'] ?? 'US',
+                    'delivery_method' => $validated['delivery_method'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'metadata' => $validated['metadata'] ?? null,
+                    'submitted_at' => $validated['submitted_at'] ?? null,
+                ]);
+            } catch (UniqueConstraintViolationException $e) {
+                if (!str_contains($e->getMessage(), 'orders_order_number_unique')) {
+                    throw $e;
+                }
+            }
+        }
+
+        if (!$order) {
+            throw ValidationException::withMessages([
+                'order_number' => ['Unable to allocate a unique order number. Please retry.'],
+            ]);
+        }
 
         if (!empty($validated['design_id'])) {
             $design = Design::find($validated['design_id']);
@@ -89,6 +111,8 @@ class OrderController extends Controller
                 $order->save();
             }
         }
+
+        $this->syncCustomerProfile($customerPayload, $order);
 
         return response()->json($order, 201);
     }
@@ -119,12 +143,15 @@ class OrderController extends Controller
             'delivery_method' => 'sometimes|nullable|string|in:Freight,UPS,USPS,FedEx,Local Pickup',
             'notes' => 'sometimes|nullable|string|max:2000',
             'metadata' => 'sometimes|nullable|array',
+            'company_name' => 'sometimes|nullable|string|max:255',
+            'nonprofit' => 'sometimes|nullable|boolean',
             'preview_image_data' => 'sometimes|nullable|string',
             'submitted_at' => 'sometimes|nullable|date',
         ]);
 
         $status = $validated['status'] ?? $order->status ?? 'unpaid';
         $this->assertCustomerFieldsPresent($validated, $status, $order);
+        $customerPayload = $this->extractCustomerPayload($validated);
 
         $order->update($validated);
 
@@ -135,6 +162,8 @@ class OrderController extends Controller
                 $order->save();
             }
         }
+
+        $this->syncCustomerProfile($customerPayload, $order);
 
         return response()->json($order);
     }
@@ -197,7 +226,72 @@ class OrderController extends Controller
     private function nextOrderNumber(): int
     {
         $current = (int) (Order::max('order_number') ?? 0);
-        $next = $current + 1;
+        $next = max(1, $current + 1);
+
+        // Keep incrementing until we find a free unique value.
+        while (Order::where('order_number', $next)->exists() && $next < 999999) {
+            $next++;
+        }
+
         return min($next, 999999);
+    }
+
+    private function extractCustomerPayload(array &$validated): array
+    {
+        $fields = [
+            'company_name',
+            'customer_name',
+            'address_line1',
+            'address_line2',
+            'city',
+            'region',
+            'postal_code',
+            'country',
+            'nonprofit',
+        ];
+
+        $payload = [];
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $validated)) {
+                $payload[$field] = $validated[$field];
+            }
+        }
+
+        unset($validated['company_name'], $validated['nonprofit']);
+
+        return $payload;
+    }
+
+    private function syncCustomerProfile(array $validated, Order $order): void
+    {
+        $fields = [
+            'company_name',
+            'customer_name',
+            'address_line1',
+            'address_line2',
+            'city',
+            'region',
+            'postal_code',
+            'country',
+            'nonprofit',
+        ];
+
+        $hasAnyField = collect($fields)->contains(fn ($field) => array_key_exists($field, $validated));
+
+        if (!$hasAnyField || !$order->user_id) {
+            return;
+        }
+
+        $payload = [];
+        foreach ($fields as $field) {
+            $payload[$field] = array_key_exists($field, $validated)
+                ? ($validated[$field] ?? null)
+                : ($order->{$field} ?? null);
+        }
+
+        Customer::updateOrCreate(
+            ['user_id' => (int) $order->user_id],
+            $payload
+        );
     }
 }
